@@ -1,0 +1,31 @@
+# Rust / Soroban
+/contract/target/
+**/*.rs.bk
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+backend/.env
+
+# Node / Next.js
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+npm-debug.log*
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
