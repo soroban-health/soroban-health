@@ -78,6 +78,8 @@ stellar contract deploy \
   --network testnet
 ```
 
+**Deployed contract ID (testnet):** `CDZ3PQQXOLSPNNDZD4QCXOIBSKZAMTPXNLTEMHVQQNEURGKGG62Z7CAZ`
+
 ### Backend
 ```bash
 cd backend
