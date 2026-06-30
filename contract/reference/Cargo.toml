@@ -1,0 +1,20 @@
+[package]
+name = "soroban-health-reference"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "Apache-2.0"
+description = "Reference contract demonstrating correct and anti-pattern implementations, used as a fixture for Soroban Health's static analysis scanner."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+testutils = ["soroban-sdk/testutils"]
