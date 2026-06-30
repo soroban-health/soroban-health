@@ -4,12 +4,12 @@ use crate::{HealthError, ReferenceContract, ReferenceContractClient};
 use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env};
 
 fn setup() -> (Env, ReferenceContractClient<'static>) {
-    let env = Env::default();
-    let contract_id = env.register(ReferenceContract, ());
-    let client = ReferenceContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    client.initialize(&admin);
-    (env, client)
+    let env = env.register_test_env();
+    let contract_id = env.register_contract_wasm(ReferenceContract);
+    let client = ReferenceContractClient::new(&env, contract_id);
+    let admin = Address generate(env);
+    client.initialize(admin);
+    env, client
 }
 
 // ---- storage.rs ----
