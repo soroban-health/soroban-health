@@ -36,11 +36,17 @@ async def run_scan(payload: ScanSourceRequest) -> ScanResult:
     if not payload.files:
         raise HTTPException(status_code=400, detail="No files provided to scan")
 
-    from app.services.analyzer import scan_file
+    from app.services.analyzer import scan_file, check_dependency_version_drift
 
     findings: list[Finding] = []
+    
+    # Run per-file checks
     for path, source in payload.files.items():
-        findings.extend(scan_file(path, source))
+        if path.endswith(".rs"):
+            findings.extend(scan_file(path, source))
+            
+    # Run cross-file checks
+    findings.extend(check_dependency_version_drift(payload.files))
 
     score = compute_health_score(
         findings=findings,

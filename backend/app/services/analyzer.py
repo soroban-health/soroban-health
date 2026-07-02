@@ -113,6 +113,88 @@ def check_unbounded_growth(file_path: str, source: str) -> list[Finding]:
 ALL_CHECKS = (check_bare_panic, check_missing_ttl_extension, check_unbounded_growth)
 
 
+def check_dependency_version_drift(files: dict[str, str]) -> list[Finding]:
+    """Check if the pinned soroban-sdk version matches the locked version.
+    
+    This requires cross-referencing Cargo.toml (where the version is pinned)
+    with Cargo.lock (where the exact version is locked). Since Cargo.lock is
+    often .gitignored, we handle its absence gracefully.
+    """
+    toml_version = None
+    toml_file_path = None
+    lock_version = None
+    lock_file_path = None
+
+    # First, find the pinned version in any Cargo.toml
+    for file_path, source in files.items():
+        if file_path.endswith("Cargo.toml"):
+            for line in source.splitlines():
+                line = line.strip()
+                if line.startswith("soroban-sdk =") or line.startswith("soroban-sdk="):
+                    val = line.split("=", 1)[1].strip()
+                    if val.startswith('"'):
+                        toml_version = val.strip('"')
+                        toml_file_path = file_path
+                        break
+                    elif val.startswith('{'):
+                        import re
+                        m = re.search(r'version\s*=\s*"([^"]+)"', val)
+                        if m:
+                            toml_version = m.group(1)
+                            toml_file_path = file_path
+                            break
+            if toml_version:
+                break
+
+    # If we couldn't find a concrete pinned version, we can't check for drift
+    if not toml_version:
+        return []
+
+    # Next, look for a Cargo.lock file and extract the locked version
+    for file_path, source in files.items():
+        if file_path.endswith("Cargo.lock"):
+            import re
+            blocks = source.split('[[package]]')
+            for block in blocks:
+                if 'name = "soroban-sdk"' in block:
+                    m = re.search(r'version\s*=\s*"([^"]+)"', block)
+                    if m:
+                        lock_version = m.group(1)
+                        lock_file_path = file_path
+                        break
+            if lock_version:
+                break
+
+    if not lock_version:
+        return [
+            Finding(
+                type=FindingType.DEPENDENCY_VERSION_DRIFT,
+                severity=Severity.LOW,
+                file=toml_file_path or "Cargo.toml",
+                line=1,
+                message=(
+                    "Cargo.lock is missing or not provided. Cannot verify if the "
+                    f"locked soroban-sdk version matches the pinned version ({toml_version})."
+                ),
+            )
+        ]
+
+    if toml_version != lock_version:
+        return [
+            Finding(
+                type=FindingType.DEPENDENCY_VERSION_DRIFT,
+                severity=Severity.MEDIUM,
+                file=lock_file_path or "Cargo.lock",
+                line=1,
+                message=(
+                    f"Dependency version drift detected. Cargo.toml pins soroban-sdk to "
+                    f"'{toml_version}', but Cargo.lock resolves it to '{lock_version}'."
+                ),
+            )
+        ]
+
+    return []
+
 def scan_file(file_path: str, source: str) -> list[Finding]:
     findings: list[Finding] = []
     for check in ALL_CHECKS:
@@ -121,9 +203,26 @@ def scan_file(file_path: str, source: str) -> list[Finding]:
 
 
 def scan_source_tree(root: Path) -> list[Finding]:
-    """Scan every `.rs` file under `root` and return aggregated findings."""
+    """Scan every relevant file under `root` and return aggregated findings."""
     findings: list[Finding] = []
-    for rs_file in sorted(root.rglob("*.rs")):
-        source = rs_file.read_text(encoding="utf-8", errors="replace")
-        findings.extend(scan_file(str(rs_file.relative_to(root)), source))
+    
+    # We need to collect all files for cross-file checks like dependency drift
+    all_files: dict[str, str] = {}
+    
+    for file_path in sorted(root.rglob("*")):
+        if file_path.is_file() and (file_path.suffix == ".rs" or file_path.name in ("Cargo.toml", "Cargo.lock")):
+            try:
+                source = file_path.read_text(encoding="utf-8", errors="replace")
+                all_files[str(file_path.relative_to(root))] = source
+            except Exception:
+                pass
+
+    # Run per-file checks on .rs files
+    for path, source in all_files.items():
+        if path.endswith(".rs"):
+            findings.extend(scan_file(path, source))
+            
+    # Run cross-file checks
+    findings.extend(check_dependency_version_drift(all_files))
+            
     return findings
