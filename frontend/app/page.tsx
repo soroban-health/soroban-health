@@ -97,7 +97,21 @@ export default function Home() {
         )}
       </section>
 
-      {result && (
+      {loading ? (
+        <section className="mt-12 space-y-6 animate-pulse">
+          <div className="flex items-center gap-5">
+            <div className="h-32 w-32 rounded-full bg-surface border-8 border-line"></div>
+            <div className="space-y-3">
+              <div className="h-3 w-24 rounded bg-line"></div>
+              <div className="h-5 w-32 rounded bg-line"></div>
+            </div>
+          </div>
+          <div>
+            <div className="mb-3 h-3 w-20 rounded bg-line"></div>
+            <div className="h-24 rounded-lg border border-line bg-surface"></div>
+          </div>
+        </section>
+      ) : result ? (
         <section className="mt-12 space-y-6">
           <HealthScoreGauge score={result.health_score} />
           <div>
@@ -107,7 +121,7 @@ export default function Home() {
             <FindingsList findings={result.findings} />
           </div>
         </section>
-      )}
+      ) : null}
     </main>
   );
 }
