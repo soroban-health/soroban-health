@@ -35,11 +35,22 @@ scoring.compute_health_score()  → float (0-100)
 ScanResult returned to frontend → HealthScoreGauge + FindingsList render it
 ```
 
+## Persistence
+
+`/contracts/` and `/scans/` are backed by Supabase Postgres
+(`backend/supabase/schema.sql`: `contracts`, `scans`, `findings` tables) via
+`app/services/repository.py`'s `ContractRepository`, injected into routes
+through `app/api/deps.py`. Running a scan upserts the contract's row first
+(so scanning an unregistered `contract_id` still works), then persists the
+scan and its findings — so `ContractSummary.latest_health_score` and
+`last_scanned_at` reflect real scan history.
+
+The test suite stays fully offline: `ContractRepository` takes an injected
+Supabase client, and `tests/conftest.py` swaps in a small in-memory fake via
+`app.dependency_overrides`, so `pytest` in CI needs no real credentials.
+
 ## What's NOT wired up yet (by design, and tracked as issues)
 
-- **No persistence.** `/contracts/` uses an in-memory dict. Wiring this to
-  Supabase (schema: `contracts`, `scans`, `findings` tables) is a concrete,
-  scoped issue — see `good first issue` / `enhancement` labels.
 - **No live RPC ingestion.** The scanner currently takes pasted source, not
   a fetched repo + on-chain event history. Adding a `app/services/rpc.py`
   that calls Soroban RPC (`getEvents`, `getLedgerEntries`) for a given
@@ -55,6 +66,9 @@ ScanResult returned to frontend → HealthScoreGauge + FindingsList render it
   testable now beats blocking on a more "correct" but unbuilt approach.
   The tradeoff is documented explicitly so it reads as a decision, not
   an oversight.
-- **In-memory store first, Supabase later:** keeps the initial API
-  contract reviewable and testable without requiring secrets/infra to
-  run the test suite in CI.
+- **Injected client + dependency override, not an in-memory fallback:**
+  `ContractRepository` always talks to a real Supabase client in production;
+  tests fake only the client itself (`tests/conftest.py`). This avoids a
+  second, divergent in-memory code path that could drift from what actually
+  runs in production, while still keeping the test suite free of real
+  secrets/infra.

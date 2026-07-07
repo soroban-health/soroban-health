@@ -2,10 +2,13 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
+from app.api.deps import get_repository
 from app.models.scan import Finding, ScanResult, Severity
+from app.services.repository import ContractRepository
 from app.services.scoring import compute_health_score
 
 router = APIRouter()
@@ -32,7 +35,10 @@ class ScanSourceRequest(BaseModel):
 
 
 @router.post("/", response_model=ScanResult)
-async def run_scan(payload: ScanSourceRequest) -> ScanResult:
+async def run_scan(
+    payload: ScanSourceRequest,
+    repo: ContractRepository = Depends(get_repository),
+) -> ScanResult:
     if not payload.files:
         raise HTTPException(status_code=400, detail="No files provided to scan")
 
@@ -48,10 +54,12 @@ async def run_scan(payload: ScanSourceRequest) -> ScanResult:
         severity_penalty=_SEVERITY_PENALTY,
     )
 
-    return ScanResult(
+    result = ScanResult(
         contract_id=payload.contract_id,
         health_score=score,
         test_coverage_pct=payload.test_coverage_pct,
         findings=findings,
         scanned_at=datetime.now(timezone.utc).isoformat(),
     )
+    await run_in_threadpool(repo.record_scan, result)
+    return result

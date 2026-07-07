@@ -26,19 +26,33 @@ ruff check .          # lint
 black --check .       # format check
 ```
 
+## Database
+
+Contracts, scans, and findings are persisted to Supabase Postgres. Apply
+`supabase/schema.sql` once (via the Supabase SQL editor or
+`psql "$SUPABASE_DB_URL" -f supabase/schema.sql`) against a fresh project,
+then set `SUPABASE_URL` and `SUPABASE_KEY` (the project's **service_role**
+key — Row Level Security is intentionally off for v0, since the backend is a
+trusted server-side caller) in `.env`.
+
+The test suite never touches a real Supabase project — `tests/conftest.py`
+provides a `FakeSupabaseClient` double injected via `app.dependency_overrides`,
+so `pytest` runs fully offline in CI.
+
 ## Project layout
 
 ```
 app/
   api/routes/    — FastAPI routers (contracts, scans, health)
+  api/deps.py    — shared FastAPI dependencies (repository injection)
   core/          — settings/config
   models/        — Pydantic request/response models
-  services/      — analyzer (static checks) + scoring (health score formula)
+  services/      — analyzer, scoring, and Supabase-backed repository
 tests/           — pytest suite, mirrors app/ structure
+supabase/        — schema.sql (Postgres DDL for contracts/scans/findings)
 ```
 
 ## Known gaps (good first issues!)
 
-- `app/api/routes/contracts.py` uses an in-memory dict instead of Supabase — see open issues for wiring up real persistence.
 - `app/services/analyzer.py` uses regex heuristics, not a real Rust AST parser. Swapping in `syn`-based parsing (likely via a small Rust subprocess or `tree-sitter-rust`) is a good medium/high-complexity issue.
 - No RPC ingestion service yet (`app/services/rpc.py` does not exist) — pulling live on-chain events from Soroban RPC is the next major feature.
