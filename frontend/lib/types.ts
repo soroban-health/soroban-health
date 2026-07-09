@@ -33,3 +33,8 @@ export interface ContractSummary {
   latest_health_score: number | null;
   last_scanned_at: string | null;
 }
+
+export interface ScanHistoryEntry {
+  health_score: number;
+  scanned_at: string;
+}

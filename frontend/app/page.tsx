@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { HealthScoreGauge } from "@/components/HealthScoreGauge";
 import { FindingsList } from "@/components/FindingsList";
-import { runScan } from "@/lib/api";
-import type { ScanResult } from "@/lib/types";
+import { HealthHistoryChart } from "@/components/HealthHistoryChart";
+import { runScan, getScanHistory } from "@/lib/api";
+import type { ScanResult, ScanHistoryEntry } from "@/lib/types";
 
 const PLACEHOLDER_SOURCE = `pub fn withdraw(env: &Env, amount: i128) -> i128 {
     if amount <= 0 {
@@ -17,6 +18,7 @@ export default function Home() {
   const [contractId, setContractId] = useState("");
   const [source, setSource] = useState(PLACEHOLDER_SOURCE);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [history, setHistory] = useState<ScanHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +31,14 @@ export default function Home() {
         files: { "lib.rs": source },
       });
       setResult(scan);
+
+      try {
+        setHistory(await getScanHistory(scan.contract_id));
+      } catch {
+        // A flaky history fetch shouldn't hide the scan result that just
+        // succeeded — degrade to "no history shown" instead.
+        setHistory([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Scan failed");
     } finally {
@@ -114,6 +124,12 @@ export default function Home() {
       ) : result ? (
         <section className="mt-12 space-y-6">
           <HealthScoreGauge score={result.health_score} />
+          <div>
+            <h2 className="mb-3 font-mono text-xs uppercase tracking-wide text-muted">
+              Health history
+            </h2>
+            <HealthHistoryChart entries={history} />
+          </div>
           <div>
             <h2 className="mb-3 font-mono text-xs uppercase tracking-wide text-muted">
               Findings ({result.findings.length})

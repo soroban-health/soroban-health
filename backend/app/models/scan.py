@@ -32,3 +32,8 @@ class ScanResult(BaseModel):
     test_coverage_pct: float | None = Field(default=None, ge=0, le=100)
     findings: list[Finding] = []
     scanned_at: str
+
+
+class ScanHistoryEntry(BaseModel):
+    health_score: float = Field(..., ge=0, le=100)
+    scanned_at: str

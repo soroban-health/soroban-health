@@ -3,7 +3,7 @@
 from supabase import Client
 
 from app.models.contract import ContractRegisterRequest, ContractSummary
-from app.models.scan import ScanResult
+from app.models.scan import ScanHistoryEntry, ScanResult
 
 
 class ContractRepository:
@@ -38,6 +38,18 @@ class ContractRepository:
     def list_contracts(self) -> list[ContractSummary]:
         response = self._client.table("contracts").select("*").execute()
         return [ContractSummary(**row) for row in response.data]
+
+    def list_scan_history(self, contract_id: str) -> list[ScanHistoryEntry]:
+        response = (
+            self._client.table("scans")
+            .select("health_score, scanned_at")
+            .eq("contract_id", contract_id)
+            .order(
+                "scanned_at"
+            )  # ascending — oldest first, chart renders left-to-right
+            .execute()
+        )
+        return [ScanHistoryEntry(**row) for row in response.data]
 
     def record_scan(self, result: ScanResult) -> None:
         # Upsert the contract row first (auto-vivifying one if this

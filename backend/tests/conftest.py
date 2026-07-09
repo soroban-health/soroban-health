@@ -2,8 +2,8 @@
 
 `FakeSupabaseClient` is a minimal hand-rolled test double implementing only
 the chainable calls `ContractRepository` actually uses (`.table()`,
-`.insert()`, `.upsert()`, `.select()`, `.eq()`, `.execute()` -> `.data`),
-backed by an in-memory `dict[str, list[dict]]`. It lets `ContractRepository`'s
+`.insert()`, `.upsert()`, `.select()`, `.eq()`, `.order()`, `.execute()` ->
+`.data`), backed by an in-memory `dict[str, list[dict]]`. It lets `ContractRepository`'s
 own query-building logic run for real in tests, with the network boundary
 (`get_supabase_client`) faked via `app.dependency_overrides` — so CI needs no
 real Supabase credentials.
@@ -29,6 +29,16 @@ class _FakeQuery:
 
     def eq(self, column: str, value) -> "_FakeQuery":
         self._rows = [row for row in self._rows if row.get(column) == value]
+        return self
+
+    def order(self, column: str, *, desc: bool = False) -> "_FakeQuery":
+        # Mirrors postgrest-py's order(column, *, desc=False). Sorting ISO-8601
+        # strings lexicographically only matches chronological order because
+        # every timestamp here is fixed-offset UTC (see scans.py) — this would
+        # not hold for mixed offsets or a "Z" suffix.
+        self._rows = sorted(
+            self._rows, key=lambda row: row.get(column) or "", reverse=desc
+        )
         return self
 
     def execute(self) -> _FakeResponse:

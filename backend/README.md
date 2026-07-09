@@ -11,6 +11,7 @@ FastAPI service powering contract scans, scoring, and the dashboard API.
 | POST | `/contracts/` | Register a contract to track |
 | GET | `/contracts/` | List tracked contracts |
 | GET | `/contracts/{contract_id}` | Get one tracked contract |
+| GET | `/contracts/{contract_id}/scans` | Health-score history for a tracked contract |
 | POST | `/scans/` | Run a static-analysis scan against provided source files |
 
 Interactive API docs are available at `/docs` once the server is running.

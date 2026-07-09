@@ -1,5 +1,20 @@
 """Route tests for /contracts/, exercised against the fake Supabase client."""
 
+GOOD_SOURCE = """
+pub fn safe_add(a: i128, b: i128) -> i128 {
+    a + b
+}
+"""
+
+BAD_SOURCE = """
+pub fn bad_unchecked_withdraw(_env: &Env, amount: i128) -> i128 {
+    if amount <= 0 {
+        panic!("amount must be positive");
+    }
+    BALANCE - amount
+}
+"""
+
 
 def test_register_contract_returns_201(client):
     response = client.post(
@@ -37,3 +52,24 @@ def test_get_contract_returns_registered_contract(client):
     response = client.get("/contracts/C123")
     assert response.status_code == 200
     assert response.json()["contract_id"] == "C123"
+
+
+def test_get_contract_scan_history_returns_ascending_scores(client):
+    client.post(
+        "/scans/", json={"contract_id": "C123", "files": {"lib.rs": GOOD_SOURCE}}
+    )
+    client.post(
+        "/scans/", json={"contract_id": "C123", "files": {"lib.rs": BAD_SOURCE}}
+    )
+
+    response = client.get("/contracts/C123/scans")
+    assert response.status_code == 200
+    history = response.json()
+    assert len(history) == 2
+    assert history[0]["scanned_at"] <= history[1]["scanned_at"]
+
+
+def test_get_contract_scan_history_returns_empty_for_unscanned_contract(client):
+    response = client.get("/contracts/does-not-exist/scans")
+    assert response.status_code == 200
+    assert response.json() == []
