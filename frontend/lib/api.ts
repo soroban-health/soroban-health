@@ -1,4 +1,4 @@
-import type { ContractSummary, ScanResult } from "./types";
+import type { ContractSummary, ScanHistoryEntry, ScanResult } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -43,4 +43,10 @@ export function runScan(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export function getScanHistory(contractId: string): Promise<ScanHistoryEntry[]> {
+  return request<ScanHistoryEntry[]>(
+    `/contracts/${encodeURIComponent(contractId)}/scans`,
+  );
 }

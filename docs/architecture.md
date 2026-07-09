@@ -49,6 +49,15 @@ The test suite stays fully offline: `ContractRepository` takes an injected
 Supabase client, and `tests/conftest.py` swaps in a small in-memory fake via
 `app.dependency_overrides`, so `pytest` in CI needs no real credentials.
 
+`GET /contracts/{contract_id}/scans` reads that history back
+(`ContractRepository.list_scan_history`, ordered ascending by `scanned_at`)
+for the dashboard's health-history chart (`HealthHistoryChart.tsx`). The
+chart spaces points evenly by scan index rather than literal elapsed time —
+a deliberate v0 simplification (irregular scan cadence will read as visually
+uniform), acceptable since the Y-axis (the health score trend) is what the
+issue actually cares about. No pagination on this endpoint yet — a known gap
+once contracts accumulate a large scan history.
+
 ## What's NOT wired up yet (by design, and tracked as issues)
 
 - **No live RPC ingestion.** The scanner currently takes pasted source, not

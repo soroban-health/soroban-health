@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_repository
 from app.models.contract import ContractRegisterRequest, ContractSummary
+from app.models.scan import ScanHistoryEntry
 from app.services.repository import ContractRepository
 
 router = APIRouter()
@@ -41,3 +42,11 @@ async def get_contract(
     if summary is None:
         raise HTTPException(status_code=404, detail="Contract not found")
     return summary
+
+
+@router.get("/{contract_id}/scans", response_model=list[ScanHistoryEntry])
+async def get_contract_scan_history(
+    contract_id: str,
+    repo: ContractRepository = Depends(get_repository),
+) -> list[ScanHistoryEntry]:
+    return await run_in_threadpool(repo.list_scan_history, contract_id)

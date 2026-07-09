@@ -38,13 +38,18 @@ def test_list_contracts_returns_all(fake_client):
     assert contract_ids == {"C1", "C2"}
 
 
-def _scan_result(contract_id: str, findings: list[Finding] | None = None) -> ScanResult:
+def _scan_result(
+    contract_id: str,
+    findings: list[Finding] | None = None,
+    health_score: float = 87.5,
+    scanned_at: str = "2026-07-07T00:00:00+00:00",
+) -> ScanResult:
     return ScanResult(
         contract_id=contract_id,
-        health_score=87.5,
+        health_score=health_score,
         test_coverage_pct=90.0,
         findings=findings or [],
-        scanned_at="2026-07-07T00:00:00+00:00",
+        scanned_at=scanned_at,
     )
 
 
@@ -94,3 +99,31 @@ def test_record_scan_skips_findings_insert_when_none(fake_client):
     repo = ContractRepository(fake_client)
     repo.record_scan(_scan_result("C123"))
     assert fake_client._store.get("findings", []) == []
+
+
+def test_list_scan_history_returns_ascending_order_regardless_of_insert_order(
+    fake_client,
+):
+    repo = ContractRepository(fake_client)
+    repo.record_scan(
+        _scan_result("C123", health_score=90.0, scanned_at="2026-07-08T00:00:00+00:00")
+    )
+    repo.record_scan(
+        _scan_result("C123", health_score=70.0, scanned_at="2026-07-05T00:00:00+00:00")
+    )
+    repo.record_scan(
+        _scan_result("C123", health_score=80.0, scanned_at="2026-07-06T00:00:00+00:00")
+    )
+
+    history = repo.list_scan_history("C123")
+    assert [entry.scanned_at for entry in history] == [
+        "2026-07-05T00:00:00+00:00",
+        "2026-07-06T00:00:00+00:00",
+        "2026-07-08T00:00:00+00:00",
+    ]
+    assert [entry.health_score for entry in history] == [70.0, 80.0, 90.0]
+
+
+def test_list_scan_history_returns_empty_when_no_scans(fake_client):
+    repo = ContractRepository(fake_client)
+    assert repo.list_scan_history("C-never-scanned") == []
