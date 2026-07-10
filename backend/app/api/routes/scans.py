@@ -3,11 +3,12 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_repository
 from app.models.scan import Finding, ScanResult, Severity
+from app.services.coverage import CoverageTool, parse_coverage_pct
 from app.services.repository import ContractRepository
 from app.services.scoring import compute_health_score
 
@@ -31,7 +32,15 @@ class ScanSourceRequest(BaseModel):
 
     contract_id: str
     files: dict[str, str]  # relative path -> file contents
-    test_coverage_pct: float | None = None
+    test_coverage_pct: float | None = Field(default=None, ge=0, le=100)
+    coverage_output: str | None = Field(
+        default=None,
+        description=(
+            "Raw output from cargo tarpaulin or cargo llvm-cov. "
+            "Used to derive test coverage automatically when test_coverage_pct is omitted."
+        ),
+    )
+    coverage_tool: CoverageTool = CoverageTool.AUTO
 
 
 @router.post("/", response_model=ScanResult)
@@ -41,6 +50,21 @@ async def run_scan(
 ) -> ScanResult:
     if not payload.files:
         raise HTTPException(status_code=400, detail="No files provided to scan")
+
+    test_coverage_pct = payload.test_coverage_pct
+    if test_coverage_pct is None and payload.coverage_output:
+        test_coverage_pct = parse_coverage_pct(
+            output=payload.coverage_output,
+            tool=payload.coverage_tool,
+        )
+        if test_coverage_pct is None:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Unable to parse coverage_output. Provide cargo tarpaulin/cargo llvm-cov output "
+                    "or set test_coverage_pct explicitly."
+                ),
+            )
 
     from app.services.analyzer import scan_file, check_dependency_version_drift
 
@@ -56,14 +80,14 @@ async def run_scan(
 
     score = compute_health_score(
         findings=findings,
-        test_coverage_pct=payload.test_coverage_pct,
+        test_coverage_pct=test_coverage_pct,
         severity_penalty=_SEVERITY_PENALTY,
     )
 
     result = ScanResult(
         contract_id=payload.contract_id,
         health_score=score,
-        test_coverage_pct=payload.test_coverage_pct,
+        test_coverage_pct=test_coverage_pct,
         findings=findings,
         scanned_at=datetime.now(timezone.utc).isoformat(),
     )
