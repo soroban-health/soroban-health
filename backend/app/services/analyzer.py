@@ -1,112 +1,175 @@
-"""Lightweight static analysis for known Soroban anti-patterns.
+"""Static analysis for known Soroban anti-patterns, backed by a
+`tree-sitter-rust` parse of the actual Rust AST rather than the previous
+regex/line-window heuristics.
 
-This is intentionally a regex/line-scan based checker rather than a full
-Rust AST parser (e.g. via `syn`). That's a deliberate v0 scope decision:
-it ships something useful immediately and is honest about being heuristic
-rather than exhaustive. A natural "good first issue" / "medium" upgrade
-path is swapping this for an AST-based pass — see the open issues.
+Each check below still returns zero or more `Finding`s for a single file's
+source text, and `ALL_CHECKS`/`scan_file`/`scan_source_tree` are unchanged —
+only *how* a hit is located changed (real AST nodes instead of scanning
+source lines), so a `push_back` or `panic!` mentioned inside a comment or
+string literal can no longer be misflagged.
 
-Each check below returns zero or more `Finding`s for a single file's
-source text. `scan_source_tree` aggregates across a directory of `.rs`
-files.
+"Nearby" (e.g. does a `.set()` have an `extend_ttl()` call to go with it)
+now means *the enclosing function*, not a fixed line window — this also
+fixes a false negative the old heuristic had: two short functions sitting
+close together (common inside a `#[contractimpl] impl Contract { ... }`
+block) could have an unrelated call in the next function satisfy the
+window, hiding a real finding. The tradeoff: a TTL/eviction call that lives
+in a sibling helper function (not the same `function_item`) still won't be
+picked up — that's a call-graph analysis problem, out of scope here.
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
+
+import tree_sitter_rust as tsrust
+from tree_sitter import Language, Node, Parser, Query, QueryCursor
 
 from app.models.scan import Finding, FindingType, Severity
 
-# A bare `panic!(...)` or `panic!("...")`, but NOT `panic_with_error!(...)`.
-_BARE_PANIC_RE = re.compile(r"(?<!_with_error)\bpanic!\s*\(")
+_LANGUAGE = Language(tsrust.language())
+_PARSER = Parser(_LANGUAGE)
 
-# A `.set(...)` on persistent storage not immediately followed (within a
-# few lines) by a call to `.extend_ttl(`. This is a heuristic, not a
-# guarantee — see module docstring.
-_PERSISTENT_SET_RE = re.compile(r"\.storage\(\)\.persistent\(\)\.set\(")
-_EXTEND_TTL_RE = re.compile(r"\.extend_ttl\(")
+_MACRO_INVOCATION_QUERY = Query(
+    _LANGUAGE, "(macro_invocation macro: (identifier) @name)"
+)
 
-# A `.push_back(` / `.push(` call inside a function body that has no
-# nearby `.len()` comparison or `.remove(` eviction call. Heuristic.
-_PUSH_RE = re.compile(r"\.(push_back|push)\(")
-_LEN_GUARD_RE = re.compile(r"\.len\(\)\s*(>=|>)\s*\w+")
-_EVICT_RE = re.compile(r"\.remove\(")
+_METHOD_CALL_QUERY = Query(
+    _LANGUAGE,
+    "(call_expression function: (field_expression field: (field_identifier) @method))",
+)
 
-_LOOKAROUND_WINDOW = 5  # lines to look before/after a hit when checking context
+# Matches `<something>.persistent().set(...)` regardless of what precedes
+# `.persistent()` (usually `env.storage()`).
+_PERSISTENT_SET_QUERY = Query(
+    _LANGUAGE,
+    """
+    (call_expression
+      function: (field_expression
+        value: (call_expression
+          function: (field_expression field: (field_identifier) @receiver))
+        field: (field_identifier) @method))
+    """,
+)
+
+# Matches `<something>.len() >= X` / `<something>.len() > X`.
+_LEN_COMPARISON_QUERY = Query(
+    _LANGUAGE,
+    """
+    (binary_expression
+      left: (call_expression function: (field_expression field: (field_identifier) @len_field))
+      operator: _ @op
+      right: (_))
+    """,
+)
 
 
-def _lines_with_context(lines: list[str], idx: int, window: int) -> list[str]:
-    start = max(0, idx - window)
-    end = min(len(lines), idx + window + 1)
-    return lines[start:end]
+def _parse(source: str) -> Node:
+    return _PARSER.parse(source.encode("utf-8")).root_node
+
+
+def _text(node: Node) -> str:
+    return node.text.decode("utf-8") if node.text is not None else ""
+
+
+def _enclosing_function(node: Node) -> Node | None:
+    current = node.parent
+    while current is not None and current.type != "function_item":
+        current = current.parent
+    return current
+
+
+def _method_names_in(scope: Node) -> set[str]:
+    names: set[str] = set()
+    for _, captures in QueryCursor(_METHOD_CALL_QUERY).matches(scope):
+        for method_node in captures.get("method", []):
+            names.add(_text(method_node))
+    return names
+
+
+def _has_len_guard(scope: Node) -> bool:
+    for _, captures in QueryCursor(_LEN_COMPARISON_QUERY).matches(scope):
+        if _text(captures["op"][0]) in (">=", ">"):
+            return True
+    return False
 
 
 def check_bare_panic(file_path: str, source: str) -> list[Finding]:
+    root = _parse(source)
     findings: list[Finding] = []
-    for i, line in enumerate(source.splitlines(), start=1):
-        if _BARE_PANIC_RE.search(line):
-            findings.append(
-                Finding(
-                    type=FindingType.BARE_PANIC_USED,
-                    severity=Severity.MEDIUM,
-                    file=file_path,
-                    line=i,
-                    message=(
-                        "Bare `panic!` used instead of a typed error "
-                        "(`panic_with_error!` or a `Result<_, E>` return). "
-                        "Callers cannot match on a specific error code."
-                    ),
-                )
+    for _, captures in QueryCursor(_MACRO_INVOCATION_QUERY).matches(root):
+        name_node = captures["name"][0]
+        if _text(name_node) != "panic":
+            continue
+        findings.append(
+            Finding(
+                type=FindingType.BARE_PANIC_USED,
+                severity=Severity.MEDIUM,
+                file=file_path,
+                line=name_node.start_point[0] + 1,
+                message=(
+                    "Bare `panic!` used instead of a typed error "
+                    "(`panic_with_error!` or a `Result<_, E>` return). "
+                    "Callers cannot match on a specific error code."
+                ),
             )
+        )
     return findings
 
 
 def check_missing_ttl_extension(file_path: str, source: str) -> list[Finding]:
+    root = _parse(source)
     findings: list[Finding] = []
-    lines = source.splitlines()
-    for i, line in enumerate(lines):
-        if _PERSISTENT_SET_RE.search(line):
-            context = _lines_with_context(lines, i, _LOOKAROUND_WINDOW)
-            if not any(_EXTEND_TTL_RE.search(ctx_line) for ctx_line in context):
-                findings.append(
-                    Finding(
-                        type=FindingType.MISSING_TTL_EXTENSION,
-                        severity=Severity.HIGH,
-                        file=file_path,
-                        line=i + 1,
-                        message=(
-                            "Persistent storage write with no nearby "
-                            "`extend_ttl` call. This entry may expire and "
-                            "be archived earlier than expected."
-                        ),
-                    )
-                )
+    for _, captures in QueryCursor(_PERSISTENT_SET_QUERY).matches(root):
+        method_node = captures["method"][0]
+        receiver_node = captures["receiver"][0]
+        if _text(method_node) != "set" or _text(receiver_node) != "persistent":
+            continue
+        enclosing = _enclosing_function(method_node)
+        if enclosing is not None and "extend_ttl" in _method_names_in(enclosing):
+            continue
+        findings.append(
+            Finding(
+                type=FindingType.MISSING_TTL_EXTENSION,
+                severity=Severity.HIGH,
+                file=file_path,
+                line=method_node.start_point[0] + 1,
+                message=(
+                    "Persistent storage write with no `extend_ttl` call in "
+                    "the same function. This entry may expire and be "
+                    "archived earlier than expected."
+                ),
+            )
+        )
     return findings
 
 
 def check_unbounded_growth(file_path: str, source: str) -> list[Finding]:
+    root = _parse(source)
     findings: list[Finding] = []
-    lines = source.splitlines()
-    for i, line in enumerate(lines):
-        if _PUSH_RE.search(line):
-            context = _lines_with_context(lines, i, _LOOKAROUND_WINDOW)
-            has_guard = any(_LEN_GUARD_RE.search(c) for c in context)
-            has_evict = any(_EVICT_RE.search(c) for c in context)
-            if not (has_guard and has_evict):
-                findings.append(
-                    Finding(
-                        type=FindingType.UNBOUNDED_STORAGE_GROWTH,
-                        severity=Severity.HIGH,
-                        file=file_path,
-                        line=i + 1,
-                        message=(
-                            "Collection append with no nearby length cap + "
-                            "eviction. Storage may grow without bound as "
-                            "the contract is used."
-                        ),
-                    )
-                )
+    for _, captures in QueryCursor(_METHOD_CALL_QUERY).matches(root):
+        method_node = captures["method"][0]
+        if _text(method_node) not in ("push_back", "push"):
+            continue
+        enclosing = _enclosing_function(method_node)
+        if enclosing is None:
+            continue
+        names = _method_names_in(enclosing)
+        if "remove" in names and _has_len_guard(enclosing):
+            continue
+        findings.append(
+            Finding(
+                type=FindingType.UNBOUNDED_STORAGE_GROWTH,
+                severity=Severity.HIGH,
+                file=file_path,
+                line=method_node.start_point[0] + 1,
+                message=(
+                    "Collection append with no length cap + eviction in "
+                    "the same function. Storage may grow without bound as "
+                    "the contract is used."
+                ),
+            )
+        )
     return findings
 
 
@@ -115,7 +178,7 @@ ALL_CHECKS = (check_bare_panic, check_missing_ttl_extension, check_unbounded_gro
 
 def check_dependency_version_drift(files: dict[str, str]) -> list[Finding]:
     """Check if the pinned soroban-sdk version matches the locked version.
-    
+
     This requires cross-referencing Cargo.toml (where the version is pinned)
     with Cargo.lock (where the exact version is locked). Since Cargo.lock is
     often .gitignored, we handle its absence gracefully.
@@ -136,8 +199,9 @@ def check_dependency_version_drift(files: dict[str, str]) -> list[Finding]:
                         toml_version = val.strip('"')
                         toml_file_path = file_path
                         break
-                    elif val.startswith('{'):
+                    elif val.startswith("{"):
                         import re
+
                         m = re.search(r'version\s*=\s*"([^"]+)"', val)
                         if m:
                             toml_version = m.group(1)
@@ -154,7 +218,8 @@ def check_dependency_version_drift(files: dict[str, str]) -> list[Finding]:
     for file_path, source in files.items():
         if file_path.endswith("Cargo.lock"):
             import re
-            blocks = source.split('[[package]]')
+
+            blocks = source.split("[[package]]")
             for block in blocks:
                 if 'name = "soroban-sdk"' in block:
                     m = re.search(r'version\s*=\s*"([^"]+)"', block)
@@ -195,6 +260,7 @@ def check_dependency_version_drift(files: dict[str, str]) -> list[Finding]:
 
     return []
 
+
 def scan_file(file_path: str, source: str) -> list[Finding]:
     findings: list[Finding] = []
     for check in ALL_CHECKS:
@@ -205,12 +271,14 @@ def scan_file(file_path: str, source: str) -> list[Finding]:
 def scan_source_tree(root: Path) -> list[Finding]:
     """Scan every relevant file under `root` and return aggregated findings."""
     findings: list[Finding] = []
-    
+
     # We need to collect all files for cross-file checks like dependency drift
     all_files: dict[str, str] = {}
-    
+
     for file_path in sorted(root.rglob("*")):
-        if file_path.is_file() and (file_path.suffix == ".rs" or file_path.name in ("Cargo.toml", "Cargo.lock")):
+        if file_path.is_file() and (
+            file_path.suffix == ".rs" or file_path.name in ("Cargo.toml", "Cargo.lock")
+        ):
             try:
                 source = file_path.read_text(encoding="utf-8", errors="replace")
                 all_files[str(file_path.relative_to(root))] = source
@@ -221,8 +289,8 @@ def scan_source_tree(root: Path) -> list[Finding]:
     for path, source in all_files.items():
         if path.endswith(".rs"):
             findings.extend(scan_file(path, source))
-            
+
     # Run cross-file checks
     findings.extend(check_dependency_version_drift(all_files))
-            
+
     return findings
