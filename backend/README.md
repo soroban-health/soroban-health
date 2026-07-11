@@ -55,5 +55,5 @@ supabase/        — schema.sql (Postgres DDL for contracts/scans/findings)
 
 ## Known gaps (good first issues!)
 
-- `app/services/analyzer.py` uses regex heuristics, not a real Rust AST parser. Swapping in `syn`-based parsing (likely via a small Rust subprocess or `tree-sitter-rust`) is a good medium/high-complexity issue.
+- `check_dependency_version_drift` in `app/services/analyzer.py` does its own ad hoc `Cargo.toml`/`Cargo.lock` text parsing instead of using the stdlib `tomllib` — a good "good first issue" cleanup.
 - No RPC ingestion service yet (`app/services/rpc.py` does not exist) — pulling live on-chain events from Soroban RPC is the next major feature.

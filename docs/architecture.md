@@ -64,17 +64,24 @@ once contracts accumulate a large scan history.
   a fetched repo + on-chain event history. Adding a `app/services/rpc.py`
   that calls Soroban RPC (`getEvents`, `getLedgerEntries`) for a given
   contract ID is the next big feature, and a good "high" complexity issue.
-- **Regex-based analysis, not a real AST.** `app/services/analyzer.py` is
-  explicit in its own docstring about this tradeoff. Swapping to an
-  AST-based pass (via `tree-sitter-rust` or a small Rust helper binary
-  using `syn`) would reduce false positives/negatives significantly.
 
 ## Why these design choices
 
-- **Heuristic analyzer first, AST later:** shipping something real and
-  testable now beats blocking on a more "correct" but unbuilt approach.
-  The tradeoff is documented explicitly so it reads as a decision, not
-  an oversight.
+- **`tree-sitter-rust` for the analyzer, not a `syn`-based subprocess:**
+  `app/services/analyzer.py` parses a real Rust AST via `tree-sitter-rust`
+  rather than the regex/line-window heuristics it started with. Syntax-only
+  parsing is sufficient here since these are pattern checks (does a `.set(`
+  have a matching `.extend_ttl(` in the same function?), not semantic ones —
+  and `tree-sitter-rust` ships as a precompiled wheel for the CI matrix,
+  unlike a `syn`-based approach which would need a Rust toolchain and a
+  cross-process boundary in the Python service. "Nearby" now means *the
+  enclosing function* rather than a fixed line window, which fixes both the
+  false positives the old heuristic had (a `push_back` mentioned in a
+  comment or string literal isn't a real AST node) and a false negative it
+  had (two short functions sitting close together could let an unrelated
+  call in the next function satisfy the window). The known remaining gap:
+  a TTL/eviction call living in a *sibling helper function* still won't be
+  picked up — that's call-graph analysis, a separate future issue.
 - **Injected client + dependency override, not an in-memory fallback:**
   `ContractRepository` always talks to a real Supabase client in production;
   tests fake only the client itself (`tests/conftest.py`). This avoids a
