@@ -43,18 +43,23 @@ so `pytest` runs fully offline in CI.
 ## Deployment (Render)
 
 Deployed as a Render web service with **Root Directory** set to `backend`
-(the repo root isn't the app root). `runtime.txt` pins the Python version —
-without it, Render defaults to the latest Python (3.14 at time of writing),
-which has no prebuilt wheel yet for the Rust-backed `pydantic-core` /
-`tree-sitter-rust` dependencies, forcing a from-source build that fails in
-Render's read-only build sandbox.
+(the repo root isn't the app root — that setting only controls where the
+build/start commands run). `/runtime.txt` at the **repository root** (not
+inside `backend/`) pins the Python version — Render scans for it there
+regardless of Root Directory. Without it, Render defaults to the latest
+Python (3.14 at time of writing), which has no prebuilt wheel yet for the
+Rust-backed `pydantic-core` / `tree-sitter-rust` dependencies, forcing a
+from-source build that fails in Render's read-only build sandbox. Also set
+the `PYTHON_VERSION` env var (same value) as a belt-and-suspenders backup —
+it's read regardless of file discovery.
 
 - **Build Command:** `pip install -r requirements.txt`
 - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - **Required env vars:** `SUPABASE_URL`, `SUPABASE_KEY` (service_role key),
   `CORS_ORIGINS` (JSON array string, must include the deployed frontend's
-  origin). `SOROBAN_RPC_URL`/`SOROBAN_NETWORK_PASSPHRASE` already have
-  working testnet defaults in `core/config.py`.
+  origin), `PYTHON_VERSION` (`3.12.7`). `SOROBAN_RPC_URL`/
+  `SOROBAN_NETWORK_PASSPHRASE` already have working testnet defaults in
+  `core/config.py`.
 
 ## Project layout
 
