@@ -10,7 +10,9 @@ _STELLAR_CONTRACT_ID_RE = re.compile(r"^C[A-Z2-7]{55}$")
 class ContractRegisterRequest(BaseModel):
     contract_id: str = Field(..., description="Soroban contract address, e.g. CABC...")
     network: str = Field(default="testnet", description="testnet | mainnet")
-    label: str | None = Field(default=None, description="Human-friendly name for the dashboard")
+    label: str | None = Field(
+        default=None, description="Human-friendly name for the dashboard"
+    )
 
     @field_validator("contract_id")
     @classmethod

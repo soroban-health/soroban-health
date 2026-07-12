@@ -22,7 +22,11 @@ VALID_CONTRACT_ID_2 = "CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
 def test_register_contract_returns_201(client):
     response = client.post(
         "/contracts/",
-        json={"contract_id": VALID_CONTRACT_ID_1, "network": "testnet", "label": "Demo"},
+        json={
+            "contract_id": VALID_CONTRACT_ID_1,
+            "network": "testnet",
+            "label": "Demo",
+        },
     )
     assert response.status_code == 201
     body = response.json()

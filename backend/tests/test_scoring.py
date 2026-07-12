@@ -18,7 +18,9 @@ def test_perfect_score_with_no_findings_and_full_coverage():
 
 
 def test_score_drops_with_high_severity_finding():
-    score = compute_health_score(findings=[_finding(Severity.HIGH)], test_coverage_pct=100.0)
+    score = compute_health_score(
+        findings=[_finding(Severity.HIGH)], test_coverage_pct=100.0
+    )
     assert score == 88.0  # 100 - 12
 
 

@@ -69,12 +69,12 @@ async def run_scan(
     from app.services.analyzer import scan_file, check_dependency_version_drift
 
     findings: list[Finding] = []
-    
+
     # Run per-file checks
     for path, source in payload.files.items():
         if path.endswith(".rs"):
             findings.extend(scan_file(path, source))
-            
+
     # Run cross-file checks
     findings.extend(check_dependency_version_drift(payload.files))
 

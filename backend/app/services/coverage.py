@@ -15,9 +15,7 @@ class CoverageTool(str, Enum):
 
 
 _TARPAULIN_PERCENT_RE = re.compile(r"(?i)\b([0-9]+(?:\.[0-9]+)?)%\s+coverage\b")
-_LLVM_TOTAL_RE = re.compile(
-    r"(?im)^\s*TOTAL\s+\d+\s+\d+\s+([0-9]+(?:\.[0-9]+)?)%\s*$"
-)
+_LLVM_TOTAL_RE = re.compile(r"(?im)^\s*TOTAL\s+\d+\s+\d+\s+([0-9]+(?:\.[0-9]+)?)%\s*$")
 
 
 def _coerce_coverage(value: float) -> float | None:
@@ -69,13 +67,17 @@ def _parse_llvm_cov_json_output(output: str) -> float | None:
     return _extract_lines_percent_from_json(payload)
 
 
-def parse_coverage_pct(output: str, tool: CoverageTool = CoverageTool.AUTO) -> float | None:
+def parse_coverage_pct(
+    output: str, tool: CoverageTool = CoverageTool.AUTO
+) -> float | None:
     """Parse test coverage percentage from tarpaulin/llvm-cov output text."""
     if tool == CoverageTool.TARP:
         return _parse_tarpaulin_output(output)
 
     if tool == CoverageTool.LLVM:
-        return _parse_llvm_cov_json_output(output) or _parse_llvm_cov_text_output(output)
+        return _parse_llvm_cov_json_output(output) or _parse_llvm_cov_text_output(
+            output
+        )
 
     # AUTO mode tries both tool formats in order of most structured to least.
     return (
