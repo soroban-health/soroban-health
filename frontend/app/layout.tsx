@@ -1,5 +1,18 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+
+const sans = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Soroban Health",
@@ -13,8 +26,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased">{children}</body>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+      <body className="bg-base font-sans text-ink antialiased">
+        {children}
+      </body>
     </html>
   );
 }

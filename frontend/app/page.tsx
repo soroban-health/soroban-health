@@ -14,6 +14,23 @@ const PLACEHOLDER_SOURCE = `pub fn withdraw(env: &Env, amount: i128) -> i128 {
     BALANCE - amount
 }`;
 
+function Logo() {
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-surface">
+      <svg viewBox="0 0 24 24" className="h-4 w-4 text-signal">
+        <path
+          d="M2 12h4l2-7 4 14 3-9 2 5h5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
 export default function Home() {
   const [contractId, setContractId] = useState("");
   const [source, setSource] = useState(PLACEHOLDER_SOURCE);
@@ -48,69 +65,78 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      <header className="mb-10">
-        <p className="font-mono text-xs uppercase tracking-widest text-accent">
-          Soroban Health
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold text-ink">
-          Scan a Soroban contract
-        </h1>
-        <p className="mt-2 text-sm text-muted">
-          Paste a contract ID and source to check for common anti-patterns
-          before they cost you in production.
-        </p>
+      <header className="mb-10 flex items-center gap-3">
+        <Logo />
+        <div>
+          <p className="font-mono text-xs uppercase tracking-widest text-accent-text">
+            Soroban Health
+          </p>
+          <h1 className="mt-0.5 text-xl font-semibold text-ink">
+            Scan a Soroban contract
+          </h1>
+        </div>
       </header>
 
-      <section className="space-y-4">
-        <div>
-          <label
-            htmlFor="contract-id"
-            className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted"
+      <p className="-mt-6 mb-8 text-sm text-muted">
+        Paste a contract ID and source to check for common anti-patterns
+        before they cost you in production.
+      </p>
+
+      <section className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex-1">
+            <label
+              htmlFor="contract-id"
+              className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted"
+            >
+              Contract ID (optional)
+            </label>
+            <input
+              id="contract-id"
+              value={contractId}
+              onChange={(e) => setContractId(e.target.value)}
+              placeholder="CABC...XYZ"
+              className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-muted/60 focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/30"
+            />
+          </div>
+          <button
+            onClick={handleScan}
+            disabled={loading || source.trim().length === 0}
+            className="h-10 shrink-0 self-end rounded-md bg-signal px-5 text-sm font-semibold text-base transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:mt-6"
           >
-            Contract ID (optional)
-          </label>
-          <input
-            id="contract-id"
-            value={contractId}
-            onChange={(e) => setContractId(e.target.value)}
-            placeholder="CABC...XYZ"
-            className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none"
-          />
+            {loading ? "Scanning…" : "Run scan"}
+          </button>
         </div>
 
-        <div>
-          <label
-            htmlFor="source"
-            className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted"
-          >
-            Rust source to scan
-          </label>
+        <div className="overflow-hidden rounded-md border border-line bg-surface">
+          <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+            <span className="h-2 w-2 rounded-full bg-critical/70" />
+            <span className="h-2 w-2 rounded-full bg-warn/70" />
+            <span className="h-2 w-2 rounded-full bg-signal/70" />
+            <label
+              htmlFor="source"
+              className="ml-2 font-mono text-xs uppercase tracking-wide text-muted"
+            >
+              lib.rs
+            </label>
+          </div>
           <textarea
             id="source"
             value={source}
             onChange={(e) => setSource(e.target.value)}
             rows={10}
-            className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-sm text-ink focus:border-accent focus:outline-none"
+            spellCheck={false}
+            className="w-full resize-y bg-transparent px-3 py-3 font-mono text-sm text-ink focus:outline-none"
           />
         </div>
 
-        <button
-          onClick={handleScan}
-          disabled={loading || source.trim().length === 0}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-base disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? "Scanning..." : "Run scan"}
-        </button>
-
-        {error && (
-          <p className="font-mono text-sm severity-high">{error}</p>
-        )}
+        {error && <p className="font-mono text-sm text-critical">{error}</p>}
       </section>
 
       {loading ? (
         <section className="mt-12 space-y-6 animate-pulse">
-          <div className="flex items-center gap-5">
-            <div className="h-32 w-32 rounded-full bg-surface border-8 border-line"></div>
+          <div className="flex items-center gap-6">
+            <div className="h-32 w-32 rounded-full border-8 border-line bg-surface"></div>
             <div className="space-y-3">
               <div className="h-3 w-24 rounded bg-line"></div>
               <div className="h-5 w-32 rounded bg-line"></div>
@@ -122,7 +148,7 @@ export default function Home() {
           </div>
         </section>
       ) : result ? (
-        <section className="mt-12 space-y-6">
+        <section className="mt-12 space-y-8">
           <HealthScoreGauge score={result.health_score} />
           <div>
             <h2 className="mb-3 font-mono text-xs uppercase tracking-wide text-muted">

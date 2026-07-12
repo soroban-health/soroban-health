@@ -13,11 +13,11 @@ const PADDING = { top: 12, right: 16, bottom: 24, left: 32 };
 const PLOT_WIDTH = VIEW_WIDTH - PADDING.left - PADDING.right;
 const PLOT_HEIGHT = VIEW_HEIGHT - PADDING.top - PADDING.bottom;
 
-const LINE_COLOR = "#22272E";
-const MUTED_COLOR = "#8A93A0";
-const INK_COLOR = "#E6EAEE";
-const ACCENT_COLOR = "#5B8CFF";
-const SURFACE_COLOR = "#12161B";
+const LINE_COLOR = "#1E2622";
+const MUTED_COLOR = "#7A9188";
+const INK_COLOR = "#E2F5EC";
+const ACCENT_COLOR = "#3DDC97";
+const SURFACE_COLOR = "#141918";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -169,7 +169,7 @@ export function HealthHistoryChart({ entries }: HealthHistoryChartProps) {
           y={last.y - 10}
           fill={INK_COLOR}
           fontSize={10}
-          fontFamily="monospace"
+          fontFamily="var(--font-mono), monospace"
           textAnchor="end"
         >
           {last.entry.health_score.toFixed(0)}

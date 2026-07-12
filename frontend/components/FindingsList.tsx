@@ -6,10 +6,10 @@ const SEVERITY_LABEL: Record<Finding["severity"], string> = {
   low: "Low",
 };
 
-const SEVERITY_CLASS: Record<Finding["severity"], string> = {
-  high: "severity-high",
-  medium: "severity-medium",
-  low: "severity-low",
+const SEVERITY_BADGE_CLASS: Record<Finding["severity"], string> = {
+  high: "border-critical/40 bg-critical/10 text-critical",
+  medium: "border-warn/40 bg-warn/10 text-warn",
+  low: "border-muted/40 bg-muted/10 text-muted",
 };
 
 interface FindingsListProps {
@@ -40,7 +40,7 @@ export function FindingsList({ findings }: FindingsListProps) {
               <p className="mt-1 text-sm text-muted">{finding.message}</p>
             </div>
             <span
-              className={`shrink-0 font-mono text-xs uppercase tracking-wide ${SEVERITY_CLASS[finding.severity]}`}
+              className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wider ${SEVERITY_BADGE_CLASS[finding.severity]}`}
             >
               {SEVERITY_LABEL[finding.severity]}
             </span>
