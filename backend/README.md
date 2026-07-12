@@ -40,6 +40,22 @@ The test suite never touches a real Supabase project — `tests/conftest.py`
 provides a `FakeSupabaseClient` double injected via `app.dependency_overrides`,
 so `pytest` runs fully offline in CI.
 
+## Deployment (Render)
+
+Deployed as a Render web service with **Root Directory** set to `backend`
+(the repo root isn't the app root). `runtime.txt` pins the Python version —
+without it, Render defaults to the latest Python (3.14 at time of writing),
+which has no prebuilt wheel yet for the Rust-backed `pydantic-core` /
+`tree-sitter-rust` dependencies, forcing a from-source build that fails in
+Render's read-only build sandbox.
+
+- **Build Command:** `pip install -r requirements.txt`
+- **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- **Required env vars:** `SUPABASE_URL`, `SUPABASE_KEY` (service_role key),
+  `CORS_ORIGINS` (JSON array string, must include the deployed frontend's
+  origin). `SOROBAN_RPC_URL`/`SOROBAN_NETWORK_PASSPHRASE` already have
+  working testnet defaults in `core/config.py`.
+
 ## Project layout
 
 ```
