@@ -16,30 +16,25 @@ Soroban Health scanner has known-good and known-bad code to validate against.
 Every "bad" function has an inline comment explaining exactly what the
 scanner should flag and why it's a real-world risk, not just a style nit.
 
-## ⚠️ Build verification status
+## Verification status
 
-This crate was written against the public `soroban-sdk` 21.x API
-(`#[contract]`, `#[contractimpl]`, `#[contracttype]`, `#[contracterror]`,
-`env.storage().persistent()/instance()`, `extend_ttl`, `Env::register`,
-`Address::generate` in testutils) as documented at
+This crate builds, and passes `cargo fmt --check`, `cargo test`, and
+`cargo clippy -- -D warnings` on every push — see the [CI workflow](../.github/workflows/ci.yml)
+and the badge on the root [README](../README.md). It's built against the
+`soroban-sdk` 21.7.x testutils API (`#[contract]`, `#[contractimpl]`,
+`#[contracttype]`, `#[contracterror]`, `env.storage().persistent()/instance()`,
+`extend_ttl`, `env.register_contract`, `Address::generate`), as documented at
 [developers.stellar.org](https://developers.stellar.org/docs/build/smart-contracts/overview).
 
-**It has not yet been compiled or run in a sandboxed environment with
-network access to crates.io / rustup**, so treat it as a careful first
-draft rather than a verified build. Before your first commit, run:
+To verify locally:
 
 ```bash
-rustup target add wasm32-unknown-unknown
-cargo build --target wasm32-unknown-unknown --release
+rustup target add wasm32v1-none
+cargo fmt --check
+stellar contract build
 cargo test
-cargo clippy --target wasm32-unknown-unknown -- -D warnings
+cargo clippy -- -D warnings
 ```
-
-and fix anything the compiler flags — SDK minor-version API drift (e.g.
-exact `register` / testutils signatures) is the most likely source of
-small mismatches. Once it builds and tests pass locally, this note
-should be deleted before your first public push, since a reviewer
-seeing "not yet verified" in the repo undercuts the project's credibility.
 
 ## Deploying to testnet
 
