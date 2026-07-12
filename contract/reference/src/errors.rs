@@ -16,7 +16,7 @@ pub enum HealthError {
     InvalidAmount = 2,
 }
 
-const BALANCE: i128 = 1_000_0000000; // toy fixed balance for demonstration
+const BALANCE: i128 = 10_000_000_000; // toy fixed balance for demonstration
 
 /// GOOD: validates input and returns a typed error instead of panicking.
 /// Callers (and tests) can match on `HealthError::InvalidAmount` /
