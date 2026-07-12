@@ -23,6 +23,8 @@ jobs:
           workspaces: contract
       - name: cargo fmt check
         run: cargo fmt --check
+      - name: Install stellar-cli build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - name: Install stellar-cli
         run: cargo install --locked stellar-cli
       - name: Build
