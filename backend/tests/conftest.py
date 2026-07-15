@@ -7,14 +7,21 @@ the chainable calls `ContractRepository` actually uses (`.table()`,
 own query-building logic run for real in tests, with the network boundary
 (`get_supabase_client`) faked via `app.dependency_overrides` — so CI needs no
 real Supabase credentials.
+
+`FakeSorobanServer` is the equivalent double for the RPC boundary, covering
+only the three `stellar_sdk.SorobanServer` calls `app.services.rpc` uses
+(`get_contract_info`, `get_latest_ledger`, `get_transactions`), swapped in
+via `get_soroban_server`.
 """
 
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from stellar_sdk import exceptions as stellar_exceptions
 
 from app.main import app
+from app.services.soroban_client import get_soroban_server
 from app.services.supabase_client import get_supabase_client
 
 
@@ -120,9 +127,64 @@ def fake_client() -> FakeSupabaseClient:
     return FakeSupabaseClient()
 
 
+class _FakeLatestLedger:
+    def __init__(self, sequence: int) -> None:
+        self.sequence = sequence
+
+
+class _FakeTransactionsPage:
+    def __init__(self, transactions: list, cursor: str = "") -> None:
+        self.transactions = transactions
+        self.cursor = cursor
+
+
+class FakeSorobanServer:
+    """Minimal double for the three SorobanServer calls app/services/rpc.py
+    uses. `pages` is consumed one per `get_transactions` call, in order,
+    regardless of the `start_ledger`/`cursor` passed — good enough to test
+    pagination-stopping logic without modeling real cursor semantics."""
+
+    def __init__(
+        self,
+        *,
+        deployed: bool = True,
+        pages: list[_FakeTransactionsPage] | None = None,
+        latest_ledger: int = 100_000,
+    ) -> None:
+        self._deployed = deployed
+        self._pages = list(pages or [])
+        self._latest_ledger = latest_ledger
+        self._page_index = 0
+
+    def get_contract_info(self, contract_id: str):
+        if not self._deployed:
+            raise stellar_exceptions.ContractInstanceNotFoundError(
+                f"Contract instance ledger entry was not found: {contract_id}."
+            )
+        return object()
+
+    def get_latest_ledger(self) -> _FakeLatestLedger:
+        return _FakeLatestLedger(self._latest_ledger)
+
+    def get_transactions(self, *, start_ledger=None, cursor=None, limit=None):
+        if self._page_index >= len(self._pages):
+            return _FakeTransactionsPage([])
+        page = self._pages[self._page_index]
+        self._page_index += 1
+        return page
+
+
 @pytest.fixture
-def client(fake_client: FakeSupabaseClient) -> TestClient:
+def fake_soroban_server() -> FakeSorobanServer:
+    return FakeSorobanServer(pages=[])
+
+
+@pytest.fixture
+def client(
+    fake_client: FakeSupabaseClient, fake_soroban_server: FakeSorobanServer
+) -> TestClient:
     app.dependency_overrides[get_supabase_client] = lambda: fake_client
+    app.dependency_overrides[get_soroban_server] = lambda: fake_soroban_server
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
