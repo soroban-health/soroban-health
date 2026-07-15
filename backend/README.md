@@ -14,6 +14,10 @@ FastAPI service powering contract scans, scoring, and the dashboard API.
 | GET | `/contracts/{contract_id}/scans` | Health-score history for a tracked contract |
 | POST | `/scans/` | Run a static-analysis scan against provided source files |
 
+`POST /scans/` responses include `on_chain_activity`: recent invocation
+count and error rate pulled live from Soroban RPC for the given
+`contract_id` (see `app/services/rpc.py`), factored into `health_score`.
+
 Interactive API docs are available at `/docs` once the server is running.
 
 ## Local development
@@ -77,4 +81,3 @@ supabase/        — schema.sql (Postgres DDL for contracts/scans/findings)
 ## Known gaps (good first issues!)
 
 - `check_dependency_version_drift` in `app/services/analyzer.py` does its own ad hoc `Cargo.toml`/`Cargo.lock` text parsing instead of using the stdlib `tomllib` — a good "good first issue" cleanup.
-- No RPC ingestion service yet (`app/services/rpc.py` does not exist) — pulling live on-chain events from Soroban RPC is the next major feature.

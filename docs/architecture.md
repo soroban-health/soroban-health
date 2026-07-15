@@ -79,11 +79,56 @@ fixed line window. A TTL or eviction call that lives in a separate helper
 function is not currently linked to the call site that needs it — tracking
 that requires call-graph analysis (see Roadmap).
 
+## On-chain activity
+
+`app/services/rpc.py`'s `SorobanActivityService` (injected via
+`app/services/soroban_client.py` and `app/api/deps.py`, following the same
+inject-the-client / fake-it-in-tests pattern as `ContractRepository`) pulls
+a contract's recent invocation history from the single Soroban RPC endpoint
+configured in `Settings.SOROBAN_RPC_URL`, for every `POST /scans/` request.
+
+It does not use `getEvents`: that only surfaces events a contract
+explicitly publishes via `env.events().publish(...)`, and most Soroban
+contracts — including this repo's own `contract/reference` fixture — never
+call that. Instead it calls `getTransactions` over a bounded, configurable
+ledger window and decodes each transaction's `fn_call` diagnostic event to
+find invocations of the target contract, combined with the transaction's
+own `SUCCESS`/`FAILED` status. This gives real invocation frequency and
+error rate, at the cost of scope limits stated here rather than left
+implicit:
+
+- `getTransactions` caps `limit` at 200 transactions per call, and testnet's
+  network-wide transaction density is high and variable enough (measured
+  10-30 transactions per ledger from unrelated activity) that the default
+  lookback window only covers on the order of a few hundred ledgers
+  (minutes), not hours — a `POST /scans/` request that needs to reach
+  current activity can take upwards of 20-30 seconds. `ledgers_scanned_to`
+  on the response reports the highest ledger actually reached, so a caller
+  can tell if the fetch was cut short rather than assuming full coverage.
+- Diagnostic events are provider-dependent — a third-party RPC provider may
+  not return them, indistinguishable in the response shape from a
+  genuinely idle contract.
+- Only one network's RPC endpoint is queried per deployment — there is no
+  `network -> RPC URL` map, since `ContractRegisterRequest.network` is a
+  display label, not a routing key.
+
+`compute_health_score` applies an error-rate penalty only once a contract
+has at least 5 recorded invocations in the lookback window (too few
+invocations make the rate unreliable — one failure out of two looks like a
+50% error rate), and only for the error rate itself — invocation frequency
+is surfaced in `ScanResult.on_chain_activity` for humans to read but doesn't
+adjust the score, since there's no baseline for how much usage is "healthy."
+An error rate of 0% is the expected reading for most contracts most of the
+time: clients that simulate a call before submitting it (the norm) reject a
+failing invocation before it ever reaches the ledger as a FAILED
+transaction, so this module mostly has nothing to report — that is a
+statement about how Soroban invocations work, not a gap in what it checks
+for. When on-chain data can't be fetched at all (RPC unreachable, or the
+contract isn't deployed to the configured network), the scan still
+completes on static findings and coverage alone.
+
 ## Roadmap
 
-- **Live Soroban RPC ingestion** — fetch a contract's on-chain event history
-  and invocation/error-rate stats via `getEvents`/`getLedgerEntries`, and
-  fold them into the health score alongside static findings.
 - **Cross-function call-graph analysis** — link a TTL extension or eviction
   call in a helper function back to the storage write it applies to, so the
   analyzer isn't limited to single-function scope.

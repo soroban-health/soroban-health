@@ -1,5 +1,10 @@
 """Route tests for /scans/, verifying scan results are persisted."""
 
+from app.main import app
+from app.services.soroban_client import get_soroban_server
+from tests.conftest import FakeSorobanServer, _FakeTransactionsPage
+from tests.test_rpc import CONTRACT_ID, _Tx, make_fn_call_diagnostic_event_xdr
+
 BAD_SOURCE = """
 pub fn bad_unchecked_withdraw(_env: &Env, amount: i128) -> i128 {
     if amount <= 0 {
@@ -64,3 +69,46 @@ def test_run_scan_rejects_unparseable_coverage_output(client):
     )
     assert response.status_code == 422
     assert "Unable to parse coverage_output" in response.json()["detail"]
+
+
+def test_run_scan_includes_onchain_activity_when_available(client):
+    tx = _Tx(
+        "SUCCESS", [make_fn_call_diagnostic_event_xdr(CONTRACT_ID, "good_log_event")]
+    )
+    app.dependency_overrides[get_soroban_server] = lambda: FakeSorobanServer(
+        pages=[_FakeTransactionsPage([tx])]
+    )
+    try:
+        response = client.post(
+            "/scans/",
+            json={"contract_id": CONTRACT_ID, "files": {"lib.rs": BAD_SOURCE}},
+        )
+    finally:
+        del app.dependency_overrides[get_soroban_server]
+
+    assert response.status_code == 200
+    activity = response.json()["on_chain_activity"]
+    assert activity["available"] is True
+    assert activity["invocation_count"] == 1
+    assert activity["error_rate"] == 0.0
+
+
+def test_run_scan_degrades_gracefully_when_rpc_unavailable(client):
+    class _BrokenServer(FakeSorobanServer):
+        def get_latest_ledger(self):
+            from stellar_sdk import exceptions as stellar_exceptions
+
+            raise stellar_exceptions.ConnectionError("network unreachable")
+
+    app.dependency_overrides[get_soroban_server] = lambda: _BrokenServer()
+    try:
+        response = client.post(
+            "/scans/",
+            json={"contract_id": CONTRACT_ID, "files": {"lib.rs": BAD_SOURCE}},
+        )
+    finally:
+        del app.dependency_overrides[get_soroban_server]
+
+    assert response.status_code == 200
+    activity = response.json()["on_chain_activity"]
+    assert activity["available"] is False

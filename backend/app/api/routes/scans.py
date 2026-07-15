@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from app.api.deps import get_repository
-from app.models.scan import Finding, ScanResult, Severity
+from app.api.deps import get_onchain_service, get_repository
+from app.models.scan import Finding, OnChainActivity, ScanResult, Severity
 from app.services.coverage import CoverageTool, parse_coverage_pct
 from app.services.repository import ContractRepository
+from app.services.rpc import RpcUnavailableError, SorobanActivityService
 from app.services.scoring import compute_health_score
 
 router = APIRouter()
@@ -47,6 +48,7 @@ class ScanSourceRequest(BaseModel):
 async def run_scan(
     payload: ScanSourceRequest,
     repo: ContractRepository = Depends(get_repository),
+    onchain: SorobanActivityService = Depends(get_onchain_service),
 ) -> ScanResult:
     if not payload.files:
         raise HTTPException(status_code=400, detail="No files provided to scan")
@@ -78,10 +80,20 @@ async def run_scan(
     # Run cross-file checks
     findings.extend(check_dependency_version_drift(payload.files))
 
+    try:
+        on_chain_activity = await run_in_threadpool(
+            onchain.fetch_activity, payload.contract_id
+        )
+    except RpcUnavailableError as exc:
+        # A scan never fails outright because on-chain data couldn't be
+        # fetched — static findings + coverage still score the contract.
+        on_chain_activity = OnChainActivity(available=False, reason=str(exc))
+
     score = compute_health_score(
         findings=findings,
         test_coverage_pct=test_coverage_pct,
         severity_penalty=_SEVERITY_PENALTY,
+        on_chain_activity=on_chain_activity,
     )
 
     result = ScanResult(
@@ -89,6 +101,7 @@ async def run_scan(
         health_score=score,
         test_coverage_pct=test_coverage_pct,
         findings=findings,
+        on_chain_activity=on_chain_activity,
         scanned_at=datetime.now(timezone.utc).isoformat(),
     )
     await run_in_threadpool(repo.record_scan, result)

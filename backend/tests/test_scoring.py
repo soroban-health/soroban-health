@@ -1,4 +1,4 @@
-from app.models.scan import Finding, FindingType, Severity
+from app.models.scan import Finding, FindingType, OnChainActivity, Severity
 from app.services.scoring import compute_health_score
 
 
@@ -44,3 +44,32 @@ def test_score_never_goes_below_zero():
 def test_score_never_exceeds_100():
     score = compute_health_score(findings=[], test_coverage_pct=100.0)
     assert score <= 100.0
+
+
+def test_onchain_error_rate_penalizes_score():
+    activity = OnChainActivity(
+        available=True, invocation_count=20, error_count=5, error_rate=0.25
+    )
+    score = compute_health_score(
+        findings=[], test_coverage_pct=100.0, on_chain_activity=activity
+    )
+    # 100 - (0.25 * 40) = 90.0
+    assert score == 90.0
+
+
+def test_onchain_penalty_skipped_below_invocation_threshold():
+    activity = OnChainActivity(
+        available=True, invocation_count=1, error_count=1, error_rate=1.0
+    )
+    score = compute_health_score(
+        findings=[], test_coverage_pct=100.0, on_chain_activity=activity
+    )
+    assert score == 100.0
+
+
+def test_onchain_penalty_skipped_when_unavailable():
+    activity = OnChainActivity(available=False, reason="not deployed to this network")
+    score = compute_health_score(
+        findings=[], test_coverage_pct=100.0, on_chain_activity=activity
+    )
+    assert score == 100.0
