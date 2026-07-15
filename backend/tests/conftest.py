@@ -12,8 +12,16 @@ real Supabase credentials.
 only the three `stellar_sdk.SorobanServer` calls `app.services.rpc` uses
 (`get_contract_info`, `get_latest_ledger`, `get_transactions`), swapped in
 via `get_soroban_server`.
+
+`_make_tarball` builds a real gzip tar archive in memory, shaped exactly
+like GitHub's tarball-endpoint response (a single top-level
+"<owner>-<repo>-<sha>/" directory wrapping the repo contents), so
+`app.services.github_fetch`'s real extraction logic is exercised in tests
+against a real archive, not a mocked one.
 """
 
+import io
+import tarfile
 import uuid
 
 import pytest
@@ -23,6 +31,18 @@ from stellar_sdk import exceptions as stellar_exceptions
 from app.main import app
 from app.services.soroban_client import get_soroban_server
 from app.services.supabase_client import get_supabase_client
+
+
+def _make_tarball(
+    files: dict[str, bytes], top_level: str = "owner-repo-abc123"
+) -> bytes:
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        for name, data in files.items():
+            info = tarfile.TarInfo(f"{top_level}/{name}")
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    return buffer.getvalue()
 
 
 class _FakeResponse:

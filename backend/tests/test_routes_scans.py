@@ -1,8 +1,11 @@
 """Route tests for /scans/, verifying scan results are persisted."""
 
+import httpx
+
+from app.api.deps import get_github_client
 from app.main import app
 from app.services.soroban_client import get_soroban_server
-from tests.conftest import FakeSorobanServer, _FakeTransactionsPage
+from tests.conftest import FakeSorobanServer, _FakeTransactionsPage, _make_tarball
 from tests.test_rpc import CONTRACT_ID, _Tx, make_fn_call_diagnostic_event_xdr
 
 BAD_SOURCE = """
@@ -112,3 +115,73 @@ def test_run_scan_degrades_gracefully_when_rpc_unavailable(client):
     assert response.status_code == 200
     activity = response.json()["on_chain_activity"]
     assert activity["available"] is False
+
+
+def _override_github_client(handler):
+    app.dependency_overrides[get_github_client] = lambda: httpx.Client(
+        transport=httpx.MockTransport(handler)
+    )
+
+
+def test_run_repo_scan_defaults_contract_id_to_owner_repo(client):
+    tarball = _make_tarball({"lib.rs": BAD_SOURCE.encode()})
+    _override_github_client(lambda request: httpx.Response(200, content=tarball))
+    try:
+        response = client.post(
+            "/scans/repo", json={"repo_url": "https://github.com/acme/widgets"}
+        )
+    finally:
+        del app.dependency_overrides[get_github_client]
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["contract_id"] == "acme/widgets"
+    assert len(body["findings"]) == 1
+
+
+def test_run_repo_scan_uses_explicit_contract_id(client):
+    tarball = _make_tarball({"lib.rs": BAD_SOURCE.encode()})
+    _override_github_client(lambda request: httpx.Response(200, content=tarball))
+    try:
+        response = client.post(
+            "/scans/repo",
+            json={
+                "repo_url": "https://github.com/acme/widgets",
+                "contract_id": "my-tracked-id",
+            },
+        )
+    finally:
+        del app.dependency_overrides[get_github_client]
+
+    assert response.status_code == 200
+    assert response.json()["contract_id"] == "my-tracked-id"
+
+
+def test_run_repo_scan_rejects_invalid_url(client):
+    response = client.post("/scans/repo", json={"repo_url": "https://gitlab.com/a/b"})
+    assert response.status_code == 400
+
+
+def test_run_repo_scan_returns_404_for_missing_repo(client):
+    _override_github_client(lambda request: httpx.Response(404))
+    try:
+        response = client.post(
+            "/scans/repo", json={"repo_url": "https://github.com/acme/missing"}
+        )
+    finally:
+        del app.dependency_overrides[get_github_client]
+
+    assert response.status_code == 404
+
+
+def test_run_repo_scan_returns_422_when_no_scannable_files(client):
+    tarball = _make_tarball({"README.md": b"nothing here"})
+    _override_github_client(lambda request: httpx.Response(200, content=tarball))
+    try:
+        response = client.post(
+            "/scans/repo", json={"repo_url": "https://github.com/acme/docs-only"}
+        )
+    finally:
+        del app.dependency_overrides[get_github_client]
+
+    assert response.status_code == 422
