@@ -13,6 +13,7 @@ FastAPI service powering contract scans, scoring, and the dashboard API.
 | GET | `/contracts/{contract_id}` | Get one tracked contract |
 | GET | `/contracts/{contract_id}/scans` | Health-score history for a tracked contract |
 | POST | `/scans/` | Run a static-analysis scan against provided source files |
+| POST | `/scans/repo` | Run a scan against a public GitHub repo's `.rs`/`Cargo.toml`/`Cargo.lock` files, fetched server-side |
 
 `POST /scans/` responses include `on_chain_activity`: recent invocation
 count and error rate pulled live from Soroban RPC for the given

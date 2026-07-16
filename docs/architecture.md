@@ -45,6 +45,12 @@ accepted. `ScanSourceRequest` accepts either a `test_coverage_pct` directly
 or raw `coverage_output` text from `cargo tarpaulin`/`cargo llvm-cov`, which
 `services/coverage.py` parses into a percentage.
 
+`POST /scans/repo` is the second entry point into the same scan+score
+pipeline: it fetches a public GitHub repo's files server-side instead of
+requiring the caller to paste them, then joins the same
+`_scan_and_persist` path `POST /scans/` uses (see GitHub repository
+scanning below).
+
 ## Persistence
 
 `/contracts/` and `/scans/` are backed by Supabase Postgres
@@ -126,6 +132,35 @@ statement about how Soroban invocations work, not a gap in what it checks
 for. When on-chain data can't be fetched at all (RPC unreachable, or the
 contract isn't deployed to the configured network), the scan still
 completes on static findings and coverage alone.
+
+## GitHub repository scanning
+
+`app/services/github_fetch.py` fetches a repo's `.rs`/`Cargo.toml`/
+`Cargo.lock` files via GitHub's REST tarball endpoint
+(`GET /repos/{owner}/{repo}/tarball[/{ref}]`), not a local `git clone`
+subprocess. This avoids depending on a `git` binary at runtime and, more
+importantly, avoids building a shell command around a user-supplied
+`repo_url` at all — the URL is parsed into owner/repo/ref via a strict
+regex, and only those validated pieces are used to construct our own
+GitHub API request. Scope is `github.com` specifically, matching the
+feature this implements; it is not a generic git-hosting client.
+
+The fetch is bounded by three independent caps, each enforced as early as
+possible: a compressed-download-size cap (checked per chunk while
+streaming, not after buffering the whole response), a decompressed-size
+cap (enforced via a byte-counting wrapper around the gzip stream, since
+`tarfile` must decompress every byte to walk from one header to the next
+even for files it discards — this is what actually bounds a
+decompression-bomb-style payload), and a file-count cap. Exceeding any of
+them fails the request with a 413 rather than exhausting server memory.
+Unauthenticated requests to the GitHub API share a low rate limit; a
+configured GitHub token would raise it substantially and is a natural
+follow-up once usage warrants it, not something this needs today.
+
+Scanning the same repo at different `ref`s (or a `contract_id` supplied
+explicitly) writes to the same tracked contract by default — the most
+recent scan's `health_score` is what `ContractSummary.latest_health_score`
+shows, regardless of which ref produced it.
 
 ## Roadmap
 
