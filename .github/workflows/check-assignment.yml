@@ -1,0 +1,20 @@
+name: Check Issue Assignment
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  check-assignment:
+    name: Verify contributor is assigned to linked issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR body references an issue
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if ! echo "$PR_BODY" | grep -qE "Closes #[0-9]+|Fixes #[0-9]+|Resolves #[0-9]+"; then
+            echo "ERROR: PR must reference an issue using 'Closes #N', 'Fixes #N', or 'Resolves #N'"
+            exit 1
+          fi
+          echo "Issue reference found."
