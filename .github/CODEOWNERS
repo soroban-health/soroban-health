@@ -1,0 +1,11 @@
+# Global owner — reviews required on all PRs
+* @patrickNwafo
+
+# Contract changes always need maintainer review
+contract/ @patrickNwafo
+
+# Backend core logic
+backend/app/services/ @patrickNwafo
+
+# Frontend core pages
+frontend/app/ @patrickNwafo
