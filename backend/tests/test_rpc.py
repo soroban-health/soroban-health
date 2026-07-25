@@ -118,6 +118,16 @@ def test_fetch_activity_stops_at_max_pages():
     assert activity.invocation_count == 400
 
 
+def test_fetch_activity_rejects_unsupported_network():
+    server = FakeSorobanServer(pages=[_FakeTransactionsPage([])])
+    service = SorobanActivityService(server)
+    try:
+        service.fetch_activity(CONTRACT_ID, network="mainnet")
+        assert False, "expected RpcUnavailableError"
+    except RpcUnavailableError as exc:
+        assert "mainnet" in str(exc)
+
+
 def test_fetch_activity_wraps_unexpected_errors(monkeypatch):
     class _BrokenServer(FakeSorobanServer):
         def get_latest_ledger(self):

@@ -78,6 +78,15 @@ DEFAULT_MAX_PAGES = 20  # hard cap on getTransactions round-trips
 DEFAULT_PAGE_LIMIT = 200  # max transactions per page allowed by the RPC
 DEFAULT_FETCH_TIMEOUT_SECONDS = 20.0  # wall-clock budget for the whole fetch
 
+# `Settings` holds exactly one Soroban RPC URL/passphrase pair today (see
+# app/services/soroban_client.py), so "testnet" is the only network that
+# actually has a live endpoint behind it. `network` is still accepted here
+# (rather than ignored) so the request shape is honest about what's
+# supported and callers get a clear, catchable error instead of silently
+# querying the wrong network. Adding a second live endpoint (e.g. mainnet)
+# is future work — see docs/superpowers/specs for the follow-up scope.
+SUPPORTED_NETWORKS = frozenset({"testnet"})
+
 _FN_CALL_TOPIC = "fn_call"
 
 
@@ -99,11 +108,18 @@ class SorobanActivityService:
         self,
         contract_id: str,
         *,
+        network: str = "testnet",
         ledger_lookback: int = DEFAULT_LEDGER_LOOKBACK,
         max_pages: int = DEFAULT_MAX_PAGES,
         page_limit: int = DEFAULT_PAGE_LIMIT,
         fetch_timeout_seconds: float = DEFAULT_FETCH_TIMEOUT_SECONDS,
     ) -> OnChainActivity:
+        if network not in SUPPORTED_NETWORKS:
+            raise RpcUnavailableError(
+                f"network {network!r} is not supported; only "
+                f"{sorted(SUPPORTED_NETWORKS)} currently has a live RPC endpoint configured"
+            )
+
         try:
             self._server.get_contract_info(contract_id)
         except stellar_exceptions.ContractInstanceNotFoundError:

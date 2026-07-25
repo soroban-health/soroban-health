@@ -44,6 +44,13 @@ class ScanSourceRequest(BaseModel):
 
     contract_id: str
     files: dict[str, str]  # relative path -> file contents
+    network: str = Field(
+        default="testnet",
+        description=(
+            "testnet | mainnet — only testnet has a live RPC endpoint "
+            "configured today; other values skip on-chain scoring gracefully."
+        ),
+    )
     test_coverage_pct: float | None = Field(default=None, ge=0, le=100)
     coverage_output: str | None = Field(
         default=None,
@@ -72,6 +79,13 @@ class ScanRepoRequest(BaseModel):
             "recently."
         ),
     )
+    network: str = Field(
+        default="testnet",
+        description=(
+            "testnet | mainnet — only testnet has a live RPC endpoint "
+            "configured today; other values skip on-chain scoring gracefully."
+        ),
+    )
     test_coverage_pct: float | None = Field(default=None, ge=0, le=100)
     coverage_output: str | None = Field(
         default=None,
@@ -87,6 +101,7 @@ async def _scan_and_persist(
     *,
     contract_id: str,
     files: dict[str, str],
+    network: str,
     test_coverage_pct: float | None,
     coverage_output: str | None,
     coverage_tool: CoverageTool,
@@ -120,7 +135,9 @@ async def _scan_and_persist(
     findings.extend(check_dependency_version_drift(files))
 
     try:
-        on_chain_activity = await run_in_threadpool(onchain.fetch_activity, contract_id)
+        on_chain_activity = await run_in_threadpool(
+            onchain.fetch_activity, contract_id, network=network
+        )
     except RpcUnavailableError as exc:
         # A scan never fails outright because on-chain data couldn't be
         # fetched — static findings + coverage still score the contract.
@@ -154,6 +171,7 @@ async def run_scan(
     return await _scan_and_persist(
         contract_id=payload.contract_id,
         files=payload.files,
+        network=payload.network,
         test_coverage_pct=payload.test_coverage_pct,
         coverage_output=payload.coverage_output,
         coverage_tool=payload.coverage_tool,
@@ -200,6 +218,7 @@ async def run_repo_scan(
     return await _scan_and_persist(
         contract_id=payload.contract_id or f"{parsed.owner}/{parsed.repo}",
         files=files,
+        network=payload.network,
         test_coverage_pct=payload.test_coverage_pct,
         coverage_output=payload.coverage_output,
         coverage_tool=payload.coverage_tool,
