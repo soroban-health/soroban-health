@@ -117,6 +117,31 @@ def test_run_scan_degrades_gracefully_when_rpc_unavailable(client):
     assert activity["available"] is False
 
 
+def test_run_scan_degrades_gracefully_for_unsupported_network(client):
+    tx = _Tx(
+        "SUCCESS", [make_fn_call_diagnostic_event_xdr(CONTRACT_ID, "good_log_event")]
+    )
+    app.dependency_overrides[get_soroban_server] = lambda: FakeSorobanServer(
+        pages=[_FakeTransactionsPage([tx])]
+    )
+    try:
+        response = client.post(
+            "/scans/",
+            json={
+                "contract_id": CONTRACT_ID,
+                "files": {"lib.rs": BAD_SOURCE},
+                "network": "mainnet",
+            },
+        )
+    finally:
+        del app.dependency_overrides[get_soroban_server]
+
+    assert response.status_code == 200
+    activity = response.json()["on_chain_activity"]
+    assert activity["available"] is False
+    assert "mainnet" in activity["reason"]
+
+
 def _override_github_client(handler):
     app.dependency_overrides[get_github_client] = lambda: httpx.Client(
         transport=httpx.MockTransport(handler)
