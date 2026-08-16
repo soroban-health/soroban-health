@@ -19,7 +19,7 @@ class ContractRegisterRequest(BaseModel):
     def validate_contract_id(cls, value: str) -> str:
         if not _STELLAR_CONTRACT_ID_RE.fullmatch(value):
             raise ValueError(
-                "contract_id must be a Stellar contract address (56 chars, starts with 'C', and uses A-Z2-7)"
+                "contract_id must be a 56-character Stellar contract address starting with C"
             )
         return value
 

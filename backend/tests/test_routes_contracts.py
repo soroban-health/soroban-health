@@ -66,9 +66,17 @@ def test_register_contract_rejects_invalid_contract_id(client):
     assert response.status_code == 422
     detail = response.json()["detail"]
     assert detail[0]["msg"] == (
-        "Value error, contract_id must be a Stellar contract address "
-        "(56 chars, starts with 'C', and uses A-Z2-7)"
+        "Value error, contract_id must be a 56-character Stellar contract address starting with C"
     )
+
+
+def test_register_contract_accepts_valid_contract_id(client):
+    response = client.post(
+        "/contracts/",
+        json={"contract_id": VALID_CONTRACT_ID_1, "network": "testnet"},
+    )
+    assert response.status_code == 201
+    assert response.json()["contract_id"] == VALID_CONTRACT_ID_1
 
 
 def test_get_contract_scan_history_returns_ascending_scores(client):
