@@ -4,6 +4,7 @@ import { useState } from "react";
 import { HealthScoreGauge } from "@/components/HealthScoreGauge";
 import { FindingsList } from "@/components/FindingsList";
 import { HealthHistoryChart } from "@/components/HealthHistoryChart";
+import { ScanSkeleton } from "@/components/ScanSkeleton";
 import { runScan, getScanHistory } from "@/lib/api";
 import type { ScanResult, ScanHistoryEntry } from "@/lib/types";
 
@@ -78,8 +79,8 @@ export default function Home() {
       </header>
 
       <p className="-mt-6 mb-8 text-sm text-muted">
-        Paste a contract ID and source to check for common anti-patterns
-        before they cost you in production.
+        Paste a contract ID and source to check for common anti-patterns before
+        they cost you in production.
       </p>
 
       <section className="space-y-3">
@@ -134,19 +135,7 @@ export default function Home() {
       </section>
 
       {loading ? (
-        <section className="mt-12 space-y-6 animate-pulse">
-          <div className="flex items-center gap-6">
-            <div className="h-32 w-32 rounded-full border-8 border-line bg-surface"></div>
-            <div className="space-y-3">
-              <div className="h-3 w-24 rounded bg-line"></div>
-              <div className="h-5 w-32 rounded bg-line"></div>
-            </div>
-          </div>
-          <div>
-            <div className="mb-3 h-3 w-20 rounded bg-line"></div>
-            <div className="h-24 rounded-lg border border-line bg-surface"></div>
-          </div>
-        </section>
+        <ScanSkeleton />
       ) : result ? (
         <section className="mt-12 space-y-8">
           <HealthScoreGauge score={result.health_score} />
