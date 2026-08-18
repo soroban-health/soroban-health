@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrote the README and architecture docs for a practitioner-facing tone
 
 ### Fixed
+- Dependency drift check no longer flags compatible version resolutions. A
+  Cargo.toml version string is a requirement, not a pin (`"21.7.0"` means
+  `^21.7.0`), so a routine patch bump like a lockfile resolving 21.7.7 was
+  being reported as drift — including in this repo's own `contract/`
+  workspace. Manifests are now parsed with `tomllib` and evaluated against
+  Cargo's real requirement semantics — caret/tilde/exact/wildcard/range
+  comparators, workspace inheritance, and SemVer pre-release precedence with
+  Cargo's opt-in rule (`^21.7.0` does not match `22.0.0-rc.1`).
 - Backend deploy pinned to Python 3.12 for Render (was defaulting to the
   latest Python, breaking the build for Rust-backed dependencies)
 - Committed `contract/Cargo.lock`, which was previously gitignored and let

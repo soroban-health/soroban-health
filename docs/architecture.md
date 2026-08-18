@@ -85,6 +85,33 @@ fixed line window. A TTL or eviction call that lives in a separate helper
 function is not currently linked to the call site that needs it — tracking
 that requires call-graph analysis (see Roadmap).
 
+## Dependency drift
+
+`check_dependency_version_drift` is a cross-file check, not one of
+`ALL_CHECKS`: it compares a manifest against a lockfile, while `ALL_CHECKS`
+runs per-file over Rust sources. `scan_file` cannot express that shape, so
+`scan_source_tree` and `app/api/routes/scans.py` call it separately.
+
+Drift means the lockfile *violates* the requirement, not that the two
+strings differ. `soroban-sdk = "21.7.0"` is a caret requirement — Cargo
+reads it as `>=21.7.0, <22.0.0` — so a lockfile resolving 21.7.7 is correct
+behavior. Comparing the strings directly flagged every routine patch bump.
+The check parses manifests with `tomllib` (so dependency tables,
+`[dev-dependencies]`, `[target.'cfg(...)'.dependencies]`, and
+`{ workspace = true }` inheritance resolve the way Cargo resolves them) and
+evaluates caret/tilde/exact/wildcard/comma-separated requirements against
+the locked versions.
+
+Pre-release versions follow Cargo's opt-in rule rather than being
+flattened to their release: `^21.7.0` does not match `22.0.0-rc.1`, while
+`^22.0.0-rc.1` matches `22.0.0-rc.2`. This matters because soroban-sdk ships
+real release candidates. Build metadata (`+deadbeef`) is dropped, per SemVer.
+
+Anything undecidable is skipped rather than reported — a git or path
+dependency, an unsupported requirement form, a malformed manifest. A false
+"your dependencies drifted" costs more trust than a missed edge case. Only
+`soroban-sdk` is inspected today (see Roadmap).
+
 ## On-chain activity
 
 `app/services/rpc.py`'s `SorobanActivityService` (injected via
@@ -170,6 +197,8 @@ shows, regardless of which ref produced it.
 - **Paginated scan history** — `GET /contracts/{contract_id}/scans` returns
   the full history today; pagination will matter once contracts accumulate
   a large number of scans.
-- **`tomllib`-based dependency parsing** — replace
-  `check_dependency_version_drift`'s manual `Cargo.toml`/`Cargo.lock` text
-  parsing with the standard library `tomllib` parser.
+- **Drift detection beyond `soroban-sdk`** — `check_dependency_version_drift`
+  parses manifests with `tomllib` and evaluates Cargo version requirements
+  properly, but only for the `soroban-sdk` crate; widening it to every
+  dependency means deciding how many findings one drifted lockfile should
+  produce.

@@ -5,9 +5,12 @@ the patterns in `contract/reference/src/*.rs`, confirming the scanner
 flags the `bad_*` style and does not flag the `good_*` style.
 """
 
+import pytest
+
 from app.models.scan import FindingType
 from app.services.analyzer import (
     check_bare_panic,
+    check_dependency_version_drift,
     check_missing_ttl_extension,
     check_unbounded_growth,
 )
@@ -233,3 +236,194 @@ def test_dependency_drift_skipped_when_no_cargo_toml():
 
     findings = check_dependency_version_drift(files)
     assert findings == []
+
+
+# --- Cargo requirement semantics -------------------------------------------
+#
+# A Cargo.toml version string is a *requirement*, not a pin: "21.7.0" means
+# `^21.7.0` (>=21.7.0, <22.0.0). Drift is the lockfile violating that
+# requirement, not the two strings differing — so a routine patch bump must
+# stay silent.
+
+
+def _drift(requirement: str, locked: str) -> list:
+    return check_dependency_version_drift(
+        {
+            "Cargo.toml": f'[dependencies]\nsoroban-sdk = "{requirement}"',
+            "Cargo.lock": f'[[package]]\nname = "soroban-sdk"\nversion = "{locked}"',
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("requirement", "locked"),
+    [
+        ("21.7.0", "21.7.7"),  # caret allows patch bumps — the regression case
+        ("21.7.0", "21.9.0"),  # caret allows minor bumps
+        ("21", "21.7.7"),
+        ("^21.7.0", "21.7.7"),
+        ("0.2.3", "0.2.9"),  # 0.x caret pins the minor
+        ("0.0.3", "0.0.3"),
+        ("~21.7", "21.7.9"),
+        ("=21.7.0", "21.7.0"),
+        (">=21.0, <22.0", "21.7.7"),
+        ("21.*", "21.7.7"),
+        ("*", "21.7.7"),
+    ],
+)
+def test_dependency_drift_not_flagged_when_lock_satisfies_requirement(
+    requirement, locked
+):
+    assert _drift(requirement, locked) == []
+
+
+@pytest.mark.parametrize(
+    ("requirement", "locked"),
+    [
+        ("21.7.0", "22.0.0"),  # major bump breaks caret
+        ("21.7.0", "21.6.9"),  # below the floor
+        ("0.2.3", "0.3.0"),  # 0.x caret: minor bump is breaking
+        ("0.0.3", "0.0.4"),  # 0.0.x caret: patch bump is breaking
+        ("~21.7", "21.8.0"),  # tilde pins the minor
+        ("=21.7.0", "21.7.7"),  # exact means exact
+        (">=21.0, <22.0", "22.1.0"),
+        ("21.*", "22.0.0"),
+    ],
+)
+def test_dependency_drift_flagged_when_lock_violates_requirement(requirement, locked):
+    findings = _drift(requirement, locked)
+    assert len(findings) == 1
+    assert findings[0].type == FindingType.DEPENDENCY_VERSION_DRIFT
+    assert findings[0].severity == "medium"
+    assert requirement in findings[0].message
+    assert locked in findings[0].message
+
+
+def test_dependency_drift_resolves_workspace_inheritance():
+    """A member crate saying `{ workspace = true }` carries no version of its
+    own — the requirement lives in the workspace root, as in `contract/`."""
+    files = {
+        "Cargo.toml": '[workspace.dependencies]\nsoroban-sdk = "21.7.0"',
+        "reference/Cargo.toml": ("[dependencies]\nsoroban-sdk = { workspace = true }"),
+        "Cargo.lock": '[[package]]\nname = "soroban-sdk"\nversion = "22.0.0"',
+    }
+    findings = check_dependency_version_drift(files)
+    assert len(findings) == 1
+    assert "21.7.0" in findings[0].message
+
+
+def test_dependency_drift_reads_dev_dependencies():
+    files = {
+        "Cargo.toml": (
+            '[dev-dependencies]\nsoroban-sdk = { version = "21.7.0", '
+            'features = ["testutils"] }'
+        ),
+        "Cargo.lock": '[[package]]\nname = "soroban-sdk"\nversion = "22.0.0"',
+    }
+    assert len(check_dependency_version_drift(files)) == 1
+
+
+def test_dependency_drift_skipped_for_git_dependency():
+    """A git dependency has no version requirement to verify."""
+    files = {
+        "Cargo.toml": (
+            "[dependencies]\nsoroban-sdk = { git = "
+            '"https://github.com/stellar/rs-soroban-sdk", branch = "main" }'
+        ),
+        "Cargo.lock": '[[package]]\nname = "soroban-sdk"\nversion = "21.7.7"',
+    }
+    assert check_dependency_version_drift(files) == []
+
+
+def test_dependency_drift_skipped_on_malformed_manifest():
+    """Repos fetched from GitHub are arbitrary; a broken manifest must not
+    fail the scan or produce a bogus finding."""
+    files = {
+        "Cargo.toml": "[dependencies\nsoroban-sdk = not valid toml",
+        "Cargo.lock": '[[package]]\nname = "soroban-sdk"\nversion = "21.7.7"',
+    }
+    assert check_dependency_version_drift(files) == []
+
+
+def test_dependency_drift_not_flagged_when_any_locked_version_satisfies():
+    """A lockfile can legitimately carry several majors of one crate."""
+    files = {
+        "Cargo.toml": '[dependencies]\nsoroban-sdk = "21.7.0"',
+        "Cargo.lock": (
+            '[[package]]\nname = "soroban-sdk"\nversion = "20.5.0"\n\n'
+            '[[package]]\nname = "soroban-sdk"\nversion = "21.7.7"'
+        ),
+    }
+    assert check_dependency_version_drift(files) == []
+
+
+def test_dependency_drift_reports_declaration_line():
+    """Findings point at the offending declaration, not line 1."""
+    files = {
+        "Cargo.toml": '[dependencies]\nsoroban-sdk = "21.7.0"',
+        "Cargo.lock": (
+            '[[package]]\nname = "other"\nversion = "1.0.0"\n\n'
+            '[[package]]\nname = "soroban-sdk"\nversion = "22.0.0"'
+        ),
+    }
+    findings = check_dependency_version_drift(files)
+    assert len(findings) == 1
+    assert findings[0].file == "Cargo.lock"
+    assert findings[0].line == 6
+
+
+def test_dependency_drift_missing_lock_points_at_manifest():
+    files = {"Cargo.toml": '[dependencies]\nsoroban-sdk = "21.7.0"'}
+    findings = check_dependency_version_drift(files)
+    assert len(findings) == 1
+    assert findings[0].severity == "low"
+    assert findings[0].file == "Cargo.toml"
+    assert findings[0].line == 2
+
+
+# --- Pre-release versions ---------------------------------------------------
+#
+# soroban-sdk ships real release candidates (22.0.0-rc.3), and Cargo will not
+# select a pre-release unless the requirement opts into one at the same
+# major.minor.patch. Treating "22.0.0-rc.1" as plain "22.0.0" would both miss
+# real drift and mis-order the two.
+
+
+@pytest.mark.parametrize(
+    ("requirement", "locked"),
+    [
+        ("=22.0.0-rc.3", "22.0.0-rc.3"),
+        ("^22.0.0-rc.1", "22.0.0-rc.2"),  # opts in at the same base
+        ("^22.0.0-rc.1", "22.0.0"),  # the release outranks its own rc
+        (">=22.0.0-rc.1, <23.0.0", "22.0.0-rc.2"),
+        ("21.7.0", "21.7.7+build.5"),  # build metadata carries no precedence
+    ],
+)
+def test_dependency_drift_not_flagged_for_matching_prerelease(requirement, locked):
+    assert _drift(requirement, locked) == []
+
+
+@pytest.mark.parametrize(
+    ("requirement", "locked"),
+    [
+        ("21.7.0", "22.0.0-rc.1"),  # a caret req never opts into a pre-release
+        ("21.7.0", "21.8.0-rc.1"),
+        ("=22.0.0-rc.3", "22.0.0-rc.4"),
+        ("^22.0.0-rc.5", "22.0.0-rc.2"),  # rc.2 sorts below the rc.5 floor
+    ],
+)
+def test_dependency_drift_flagged_for_incompatible_prerelease(requirement, locked):
+    findings = _drift(requirement, locked)
+    assert len(findings) == 1
+    assert findings[0].type == FindingType.DEPENDENCY_VERSION_DRIFT
+
+
+def test_prerelease_identifiers_order_numerically_below_alphanumeric():
+    """SemVer: numeric identifiers compare numerically and rank below
+    alphanumeric ones, so rc.10 is newer than rc.9 (not older, as a string
+    comparison would have it)."""
+    from app.services.analyzer import _satisfies
+
+    assert _satisfies("22.0.0-rc.10", "^22.0.0-rc.9") is True
+    assert _satisfies("22.0.0-rc.9", "^22.0.0-rc.10") is False
+    assert _satisfies("22.0.0-2", "^22.0.0-rc") is False

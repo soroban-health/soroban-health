@@ -81,4 +81,5 @@ supabase/        — schema.sql (Postgres DDL for contracts/scans/findings)
 
 ## Known gaps (good first issues!)
 
-- `check_dependency_version_drift` in `app/services/analyzer.py` does its own ad hoc `Cargo.toml`/`Cargo.lock` text parsing instead of using the stdlib `tomllib` — a good "good first issue" cleanup.
+- `check_dependency_version_drift` only inspects `soroban-sdk`. Extending it to every
+  dependency (and reporting one finding per drifted crate) is a natural next step.

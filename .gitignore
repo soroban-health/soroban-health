@@ -29,3 +29,6 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
+
+# Visual Studio
+.vs/
