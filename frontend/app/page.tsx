@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HealthScoreGauge } from "@/components/HealthScoreGauge";
 import { FindingsList } from "@/components/FindingsList";
 import { HealthHistoryChart } from "@/components/HealthHistoryChart";
@@ -39,6 +39,19 @@ export default function Home() {
   const [history, setHistory] = useState<ScanHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reflect scan state in the browser tab so results are visible without
+  // switching back. Derived from local state only — no API calls.
+  const sourceIsEmpty = source.trim().length === 0;
+  useEffect(() => {
+    if (loading) {
+      document.title = "Soroban Health — Scanning…";
+    } else if (result && !sourceIsEmpty) {
+      document.title = `Soroban Health — ${result.health_score} | ${result.findings.length} findings`;
+    } else {
+      document.title = "Soroban Health";
+    }
+  }, [loading, result, sourceIsEmpty]);
 
   async function handleScan() {
     setLoading(true);
