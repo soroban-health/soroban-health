@@ -5,8 +5,10 @@ import { HealthScoreGauge } from "@/components/HealthScoreGauge";
 import { FindingsList } from "@/components/FindingsList";
 import { HealthHistoryChart } from "@/components/HealthHistoryChart";
 import { ScanSkeleton } from "@/components/ScanSkeleton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { runScan, getScanHistory } from "@/lib/api";
 import type { ScanResult, ScanHistoryEntry } from "@/lib/types";
+
 
 const PLACEHOLDER_SOURCE = `pub fn withdraw(env: &Env, amount: i128) -> i128 {
     if amount <= 0 {
@@ -79,16 +81,19 @@ export default function Home() {
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
-      <header className="mb-10 flex items-center gap-3">
-        <Logo />
-        <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-accent-text">
-            Soroban Health
-          </p>
-          <h1 className="mt-0.5 text-xl font-semibold text-ink">
-            Scan a Soroban contract
-          </h1>
+      <header className="mb-10 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Logo />
+          <div>
+            <p className="font-mono text-xs uppercase tracking-widest text-accent-text">
+              Soroban Health
+            </p>
+            <h1 className="mt-0.5 text-xl font-semibold text-ink">
+              Scan a Soroban contract
+            </h1>
+          </div>
         </div>
+        <ThemeToggle />
       </header>
 
       <p className="-mt-6 mb-8 text-sm text-muted">
