@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 
 interface HealthScoreGaugeProps {
   score: number;
+  findingsSummary?: {
+    high?: number;
+    medium?: number;
+    low?: number;
+  };
 }
 
 function bandFor(score: number): {
@@ -53,7 +58,7 @@ function useCountUp(target: number, duration = 900): number {
   return value;
 }
 
-export function HealthScoreGauge({ score }: HealthScoreGaugeProps) {
+export function HealthScoreGauge({ score, findingsSummary }: HealthScoreGaugeProps) {
   const animated = useCountUp(score);
   const band = bandFor(animated);
   const radius = 54;
@@ -98,6 +103,15 @@ export function HealthScoreGauge({ score }: HealthScoreGaugeProps) {
         <p className={`mt-1 text-lg font-semibold ${band.text}`}>
           {band.label}
         </p>
+        {findingsSummary && (
+          <div className="mt-2 flex items-center gap-2 font-mono text-xs text-muted">
+            <span className="font-medium text-critical">{findingsSummary.high ?? 0} HIGH</span>
+            <span>·</span>
+            <span className="font-medium text-warn">{findingsSummary.medium ?? 0} MED</span>
+            <span>·</span>
+            <span className="font-medium text-signal">{findingsSummary.low ?? 0} LOW</span>
+          </div>
+        )}
       </div>
     </div>
   );

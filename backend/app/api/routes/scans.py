@@ -150,11 +150,18 @@ async def _scan_and_persist(
         on_chain_activity=on_chain_activity,
     )
 
+    findings_summary = {
+        "high": sum(1 for f in findings if f.severity == Severity.HIGH),
+        "medium": sum(1 for f in findings if f.severity == Severity.MEDIUM),
+        "low": sum(1 for f in findings if f.severity == Severity.LOW),
+    }
+
     result = ScanResult(
         contract_id=contract_id,
         health_score=score,
         test_coverage_pct=test_coverage_pct,
         findings=findings,
+        findings_summary=findings_summary,
         on_chain_activity=on_chain_activity,
         scanned_at=datetime.now(timezone.utc).isoformat(),
     )

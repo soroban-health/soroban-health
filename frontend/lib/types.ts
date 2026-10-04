@@ -23,6 +23,11 @@ export interface ScanResult {
   health_score: number;
   test_coverage_pct: number | null;
   findings: Finding[];
+  findings_summary?: {
+    high: number;
+    medium: number;
+    low: number;
+  };
   scanned_at: string;
 }
 
