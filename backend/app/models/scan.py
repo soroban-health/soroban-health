@@ -16,6 +16,7 @@ class FindingType(str, Enum):
     BARE_PANIC_USED = "bare_panic_used"
     MISSING_TTL_EXTENSION = "missing_ttl_extension"
     DEPENDENCY_VERSION_DRIFT = "dependency_version_drift"
+    WASM_SIZE_EXCEEDED = "wasm_size_exceeded"
 
 
 class Finding(BaseModel):
