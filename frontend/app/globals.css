@@ -1,3 +1,123 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --color-base: #0B0F0E;
+  --color-surface: #141918;
+  --color-line: #1E2622;
+  --color-ink: #E2F5EC;
+  --color-muted: #7A9188;
+  --color-signal: #3DDC97;
+  --color-warn: #E8A33D;
+  --color-critical: #E2574C;
+  --color-accent-text: #A8F0CB;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --color-base: #FFFFFF;
+  --color-surface: #F5F7F6;
+  --color-line: #E1E6E3;
+  --color-ink: #121816;
+  --color-muted: #5C6B64;
+  --color-signal: #188653;
+  --color-warn: #B46506;
+  --color-critical: #D12E20;
+  --color-accent-text: #188653;
+  color-scheme: light;
+}
+
+/* Light mode utility class overrides */
+[data-theme="light"] body,
+[data-theme="light"] .bg-base {
+  background-color: var(--color-base) !important;
+}
+
+[data-theme="light"] .bg-surface {
+  background-color: var(--color-surface) !important;
+}
+
+[data-theme="light"] .border-line {
+  border-color: var(--color-line) !important;
+}
+
+[data-theme="light"] .text-ink {
+  color: var(--color-ink) !important;
+}
+
+[data-theme="light"] .text-muted {
+  color: var(--color-muted) !important;
+}
+
+[data-theme="light"] .text-signal {
+  color: var(--color-signal) !important;
+}
+
+[data-theme="light"] .text-warn {
+  color: var(--color-warn) !important;
+}
+
+[data-theme="light"] .text-critical {
+  color: var(--color-critical) !important;
+}
+
+[data-theme="light"] .text-accent-text {
+  color: var(--color-accent-text) !important;
+}
+
+[data-theme="light"] .bg-signal {
+  background-color: var(--color-signal) !important;
+}
+
+[data-theme="light"] .bg-warn {
+  background-color: var(--color-warn) !important;
+}
+
+[data-theme="light"] .bg-critical {
+  background-color: var(--color-critical) !important;
+}
+
+/* Light mode form controls */
+[data-theme="light"] input,
+[data-theme="light"] textarea {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-line) !important;
+  color: var(--color-ink) !important;
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: var(--color-muted) !important;
+  opacity: 0.7;
+}
+
+/* Light mode SVG chart & gauge elements */
+[data-theme="light"] svg text[fill="#E2F5EC"] {
+  fill: var(--color-ink) !important;
+}
+
+[data-theme="light"] svg text[fill="#7A9188"] {
+  fill: var(--color-muted) !important;
+}
+
+[data-theme="light"] svg line[stroke="#1E2622"] {
+  stroke: var(--color-line) !important;
+}
+
+[data-theme="light"] svg line[stroke="#7A9188"] {
+  stroke: var(--color-muted) !important;
+}
+
+[data-theme="light"] svg polyline[stroke="#3DDC97"] {
+  stroke: var(--color-signal) !important;
+}
+
+[data-theme="light"] svg circle[fill="#3DDC97"] {
+  fill: var(--color-signal) !important;
+  stroke: var(--color-surface) !important;
+}
+
+[data-theme="light"] svg path[stroke="#1E2622"] {
+  stroke: var(--color-line) !important;
+}
