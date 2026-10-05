@@ -65,7 +65,11 @@ class ScanResult(BaseModel):
                 findings = data.get("findings", [])
                 summary = {"high": 0, "medium": 0, "low": 0}
                 for f in findings:
-                    sev = f.get("severity") if isinstance(f, dict) else getattr(f, "severity", None)
+                    sev = (
+                        f.get("severity")
+                        if isinstance(f, dict)
+                        else getattr(f, "severity", None)
+                    )
                     sev_str = sev.value if hasattr(sev, "value") else str(sev).lower()
                     if sev_str in summary:
                         summary[sev_str] += 1
