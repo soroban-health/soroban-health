@@ -2,7 +2,8 @@
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from typing import Any
+from pydantic import BaseModel, Field, model_validator
 
 
 class Severity(str, Enum):
@@ -50,8 +51,30 @@ class ScanResult(BaseModel):
     health_score: float = Field(..., ge=0, le=100)
     test_coverage_pct: float | None = Field(default=None, ge=0, le=100)
     findings: list[Finding] = []
+    findings_summary: dict[str, int] = Field(
+        default_factory=lambda: {"high": 0, "medium": 0, "low": 0}
+    )
     on_chain_activity: OnChainActivity | None = None
     scanned_at: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_findings_summary(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "findings_summary" not in data or not data["findings_summary"]:
+                findings = data.get("findings", [])
+                summary = {"high": 0, "medium": 0, "low": 0}
+                for f in findings:
+                    sev = (
+                        f.get("severity")
+                        if isinstance(f, dict)
+                        else getattr(f, "severity", None)
+                    )
+                    sev_str = sev.value if hasattr(sev, "value") else str(sev).lower()
+                    if sev_str in summary:
+                        summary[sev_str] += 1
+                data["findings_summary"] = summary
+        return data
 
 
 class ScanHistoryEntry(BaseModel):

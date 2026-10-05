@@ -32,12 +32,31 @@ def test_run_scan_persists_result_and_updates_contract_summary(client):
     assert body["contract_id"] == "C123"
     assert len(body["findings"]) == 1
     assert body["findings"][0]["type"] == "bare_panic_used"
+    assert body["findings_summary"] == {"high": 0, "medium": 1, "low": 0}
 
     contract_response = client.get("/contracts/C123")
     assert contract_response.status_code == 200
     summary = contract_response.json()
     assert summary["latest_health_score"] == body["health_score"]
     assert summary["last_scanned_at"] == body["scanned_at"]
+
+
+def test_run_scan_returns_findings_summary_breakdown(client):
+    clean_source = """
+    pub fn hello() -> u32 {
+        42
+    }
+    """
+    response = client.post(
+        "/scans/",
+        json={
+            "contract_id": "C_CLEAN",
+            "files": {"lib.rs": clean_source},
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["findings_summary"] == {"high": 0, "medium": 0, "low": 0}
 
 
 def test_run_scan_with_no_files_returns_400(client):

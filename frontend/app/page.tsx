@@ -156,7 +156,7 @@ export default function Home() {
         <ScanSkeleton />
       ) : result ? (
         <section className="mt-12 space-y-8">
-          <HealthScoreGauge score={result.health_score} />
+          <HealthScoreGauge score={result.health_score} findingsSummary={result.findings_summary} />
           <div>
             <h2 className="mb-3 font-mono text-xs uppercase tracking-wide text-muted">
               Health history
