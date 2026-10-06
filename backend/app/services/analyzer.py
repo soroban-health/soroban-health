@@ -625,4 +625,3 @@ def check_wasm_size(
         ]
 
     return []
-
