@@ -427,3 +427,26 @@ def test_prerelease_identifiers_order_numerically_below_alphanumeric():
     assert _satisfies("22.0.0-rc.10", "^22.0.0-rc.9") is True
     assert _satisfies("22.0.0-rc.9", "^22.0.0-rc.10") is False
     assert _satisfies("22.0.0-2", "^22.0.0-rc") is False
+
+
+def test_wasm_size_check_bands():
+    from app.models.scan import Severity
+    from app.services.analyzer import check_wasm_size
+
+    # Band 1: None or <= 50KB -> no finding
+    assert check_wasm_size(None) == []
+    assert check_wasm_size(0) == []
+    assert check_wasm_size(40 * 1024) == []
+    assert check_wasm_size(50 * 1024) == []
+
+    # Band 2: > 50KB and <= 100KB -> MEDIUM severity
+    med = check_wasm_size(75 * 1024)
+    assert len(med) == 1
+    assert med[0].type == FindingType.WASM_SIZE_EXCEEDED
+    assert med[0].severity == Severity.MEDIUM
+
+    # Band 3: > 100KB -> HIGH severity
+    high = check_wasm_size(150 * 1024)
+    assert len(high) == 1
+    assert high[0].type == FindingType.WASM_SIZE_EXCEEDED
+    assert high[0].severity == Severity.HIGH

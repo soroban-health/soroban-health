@@ -577,3 +577,51 @@ def scan_source_tree(root: Path) -> list[Finding]:
     findings.extend(check_dependency_version_drift(all_files))
 
     return findings
+
+
+def check_wasm_size(
+    wasm_size_bytes: int | None,
+    threshold_bytes: int = 50 * 1024,
+) -> list[Finding]:
+    """Checks compiled WASM binary size and flags findings if thresholds are exceeded.
+
+    - Below 50KB: no finding
+    - Over 50KB (<= 100KB): MEDIUM severity finding
+    - Over 100KB: HIGH severity finding
+    """
+    if wasm_size_bytes is None:
+        return []
+
+    high_threshold = 100 * 1024
+    medium_threshold = threshold_bytes
+
+    if wasm_size_bytes > high_threshold:
+        size_kb = wasm_size_bytes / 1024
+        return [
+            Finding(
+                type=FindingType.WASM_SIZE_EXCEEDED,
+                severity=Severity.HIGH,
+                file="<wasm>",
+                line=1,
+                message=(
+                    f"Compiled WASM size of {size_kb:.1f} KB exceeds high threshold of 100 KB. "
+                    "Large binaries incur high deploy/storage fees on the Stellar ledger."
+                ),
+            )
+        ]
+    elif wasm_size_bytes > medium_threshold:
+        size_kb = wasm_size_bytes / 1024
+        return [
+            Finding(
+                type=FindingType.WASM_SIZE_EXCEEDED,
+                severity=Severity.MEDIUM,
+                file="<wasm>",
+                line=1,
+                message=(
+                    f"Compiled WASM size of {size_kb:.1f} KB exceeds warning threshold of {medium_threshold // 1024} KB. "
+                    "Consider optimizing binary size using wasm-opt or cargo-contract."
+                ),
+            )
+        ]
+
+    return []

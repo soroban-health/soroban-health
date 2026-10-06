@@ -38,6 +38,7 @@ export function runScan(input: {
   contract_id: string;
   files: Record<string, string>;
   test_coverage_pct?: number;
+  wasm_size_bytes?: number;
 }): Promise<ScanResult> {
   return request<ScanResult>("/scans/", {
     method: "POST",

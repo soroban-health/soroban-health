@@ -9,7 +9,11 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import get_github_client, get_onchain_service, get_repository
 from app.models.scan import Finding, OnChainActivity, ScanResult, Severity
-from app.services.analyzer import check_dependency_version_drift, scan_file
+from app.services.analyzer import (
+    check_dependency_version_drift,
+    check_wasm_size,
+    scan_file,
+)
 from app.services.coverage import CoverageTool, parse_coverage_pct
 from app.services.github_fetch import (
     GitHubFetchError,
@@ -60,6 +64,11 @@ class ScanSourceRequest(BaseModel):
         ),
     )
     coverage_tool: CoverageTool = CoverageTool.AUTO
+    wasm_size_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description="Compiled WASM binary size in bytes.",
+    )
 
 
 class ScanRepoRequest(BaseModel):
@@ -105,6 +114,7 @@ async def _scan_and_persist(
     test_coverage_pct: float | None,
     coverage_output: str | None,
     coverage_tool: CoverageTool,
+    wasm_size_bytes: int | None = None,
     repo: ContractRepository,
     onchain: SorobanActivityService,
 ) -> ScanResult:
@@ -133,6 +143,7 @@ async def _scan_and_persist(
 
     # Run cross-file checks
     findings.extend(check_dependency_version_drift(files))
+    findings.extend(check_wasm_size(wasm_size_bytes))
 
     try:
         on_chain_activity = await run_in_threadpool(
@@ -182,6 +193,7 @@ async def run_scan(
         test_coverage_pct=payload.test_coverage_pct,
         coverage_output=payload.coverage_output,
         coverage_tool=payload.coverage_tool,
+        wasm_size_bytes=payload.wasm_size_bytes,
         repo=repo,
         onchain=onchain,
     )
