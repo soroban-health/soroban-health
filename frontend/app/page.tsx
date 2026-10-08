@@ -36,6 +36,7 @@ function Logo() {
 
 export default function Home() {
   const [contractId, setContractId] = useState("");
+  const [wasmSizeKb, setWasmSizeKb] = useState("");
   const [source, setSource] = useState(PLACEHOLDER_SOURCE);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [history, setHistory] = useState<ScanHistoryEntry[]>([]);
@@ -59,9 +60,16 @@ export default function Home() {
     setLoading(true);
     setError(null);
     try {
+      const parsedWasmSize = parseFloat(wasmSizeKb);
+      const wasm_size_bytes =
+        !isNaN(parsedWasmSize) && parsedWasmSize > 0
+          ? Math.round(parsedWasmSize * 1024)
+          : undefined;
+
       const scan = await runScan({
         contract_id: contractId || "unregistered-snippet",
         files: { "lib.rs": source },
+        ...(wasm_size_bytes ? { wasm_size_bytes } : {}),
       });
       setResult(scan);
 
@@ -115,6 +123,24 @@ export default function Home() {
               value={contractId}
               onChange={(e) => setContractId(e.target.value)}
               placeholder="CABC...XYZ"
+              className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-muted/60 focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/30"
+            />
+          </div>
+          <div className="w-full sm:w-36">
+            <label
+              htmlFor="wasm-size"
+              className="mb-1 block font-mono text-xs uppercase tracking-wide text-muted"
+            >
+              WASM size (KB)
+            </label>
+            <input
+              id="wasm-size"
+              type="number"
+              min="0"
+              step="any"
+              value={wasmSizeKb}
+              onChange={(e) => setWasmSizeKb(e.target.value)}
+              placeholder="e.g. 45"
               className="w-full rounded-md border border-line bg-surface px-3 py-2 font-mono text-sm text-ink placeholder:text-muted/60 focus:border-signal focus:outline-none focus:ring-2 focus:ring-signal/30"
             />
           </div>
