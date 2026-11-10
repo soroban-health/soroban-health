@@ -551,7 +551,50 @@ def scan_file(file_path: str, source: str) -> list[Finding]:
     return findings
 
 
-def scan_source_tree(root: Path) -> list[Finding]:
+def check_wasm_size(
+    wasm_size_bytes: int | None,
+    threshold_bytes: int = 50 * 1024,
+) -> list[Finding]:
+    """Evaluates compiled WASM binary size and returns findings:
+    - Below 50KB: no finding
+    - Over 50KB (up to 100KB): MEDIUM severity finding
+    - Over 100KB: HIGH severity finding
+    """
+    if wasm_size_bytes is None or wasm_size_bytes <= threshold_bytes:
+        return []
+
+    kb = wasm_size_bytes / 1024.0
+    if wasm_size_bytes > 100 * 1024:
+        return [
+            Finding(
+                type=FindingType.WASM_SIZE_EXCEEDED,
+                severity=Severity.HIGH,
+                file="contract.wasm",
+                line=1,
+                message=(
+                    f"Compiled WASM binary size ({kb:.1f}KB) exceeds 100KB limit. "
+                    "Large binaries incur excessive deployment fees and ledger rent."
+                ),
+            )
+        ]
+    return [
+        Finding(
+            type=FindingType.WASM_SIZE_EXCEEDED,
+            severity=Severity.MEDIUM,
+            file="contract.wasm",
+            line=1,
+            message=(
+                f"Compiled WASM binary size ({kb:.1f}KB) exceeds 50KB threshold. "
+                "Consider optimizing code or stripping unused symbols."
+            ),
+        )
+    ]
+
+
+def scan_source_tree(
+    root: Path,
+    wasm_size_bytes: int | None = None,
+) -> list[Finding]:
     """Scan every relevant file under `root` and return aggregated findings."""
     findings: list[Finding] = []
 
@@ -576,4 +619,9 @@ def scan_source_tree(root: Path) -> list[Finding]:
     # Run cross-file checks
     findings.extend(check_dependency_version_drift(all_files))
 
+    # Run WASM size check if size is supplied
+    if wasm_size_bytes is not None:
+        findings.extend(check_wasm_size(wasm_size_bytes))
+
     return findings
+

@@ -8,7 +8,8 @@ export type FindingType =
   | "unbounded_storage_growth"
   | "bare_panic_used"
   | "missing_ttl_extension"
-  | "dependency_version_drift";
+  | "dependency_version_drift"
+  | "wasm_size_exceeded";
 
 export interface Finding {
   type: FindingType;

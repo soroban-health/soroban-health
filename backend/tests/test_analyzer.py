@@ -427,3 +427,40 @@ def test_prerelease_identifiers_order_numerically_below_alphanumeric():
     assert _satisfies("22.0.0-rc.10", "^22.0.0-rc.9") is True
     assert _satisfies("22.0.0-rc.9", "^22.0.0-rc.10") is False
     assert _satisfies("22.0.0-2", "^22.0.0-rc") is False
+
+
+# --- WASM binary size check tests -------------------------------------------
+
+
+def test_check_wasm_size_below_threshold():
+    from app.services.analyzer import check_wasm_size
+
+    assert check_wasm_size(None) == []
+    assert check_wasm_size(0) == []
+    assert check_wasm_size(40 * 1024) == []
+    assert check_wasm_size(50 * 1024) == []
+
+
+def test_check_wasm_size_medium_band():
+    from app.services.analyzer import check_wasm_size
+    from app.models.scan import FindingType, Severity
+
+    findings = check_wasm_size(75 * 1024)
+    assert len(findings) == 1
+    assert findings[0].type == FindingType.WASM_SIZE_EXCEEDED
+    assert findings[0].severity == Severity.MEDIUM
+    assert "75.0KB" in findings[0].message
+    assert "50KB" in findings[0].message
+
+
+def test_check_wasm_size_high_band():
+    from app.services.analyzer import check_wasm_size
+    from app.models.scan import FindingType, Severity
+
+    findings = check_wasm_size(150 * 1024)
+    assert len(findings) == 1
+    assert findings[0].type == FindingType.WASM_SIZE_EXCEEDED
+    assert findings[0].severity == Severity.HIGH
+    assert "150.0KB" in findings[0].message
+    assert "100KB" in findings[0].message
+
